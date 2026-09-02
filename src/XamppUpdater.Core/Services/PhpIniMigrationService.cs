@@ -23,7 +23,8 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         var extRoot = Path.Combine(newPhpRoot, "ext");
         var oldPhpRoot = Path.GetDirectoryName(currentIniPath) ?? string.Empty;
         var availableDlls = EnumerateAvailableDlls(newPhpRoot, extRoot);
-        var disableLegacySessionSettings = IsVersionAtLeast(targetVersion, 8, 4);
+        var disableLegacySessionSettings = IsVersionAtLeast(targetVersion, 8, 4) || LooksLikePhp8(newPhpRoot);
+        var displayVersion = string.IsNullOrWhiteSpace(targetVersion) ? "8.x" : targetVersion;
 
         foreach (var line in lines)
         {
@@ -31,8 +32,8 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
                 (directiveName.Equals("session.sid_length", StringComparison.OrdinalIgnoreCase) ||
                  directiveName.Equals("session.sid_bits_per_character", StringComparison.OrdinalIgnoreCase)))
             {
-                migrated.Add($"; XAMPP Updater disabled deprecated setting for PHP {targetVersion}: {line.Trim()}");
-                warnings.Add($"PHP {targetVersion}에서 deprecated 설정 비활성화: {directiveName}");
+                migrated.Add($"; XAMPP Updater disabled deprecated setting for PHP {displayVersion}: {line.Trim()}");
+                warnings.Add($"PHP {displayVersion}에서 deprecated 설정 비활성화: {directiveName}");
                 continue;
             }
 
@@ -149,6 +150,12 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         {
             return null;
         }
+    }
+
+    private static bool LooksLikePhp8(string phpRoot)
+    {
+        if (!Directory.Exists(phpRoot)) return false;
+        return Directory.EnumerateFiles(phpRoot, "php8*.dll", SearchOption.TopDirectoryOnly).Any();
     }
 
     private static bool TryGetDirectiveName(string line, out string name)
