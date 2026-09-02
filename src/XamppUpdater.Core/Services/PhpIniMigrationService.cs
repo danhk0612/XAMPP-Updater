@@ -9,6 +9,13 @@ public interface IPhpIniMigrationService
 
 public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
 {
+    private readonly IPhpMigrationOverrideStore _overrideStore;
+
+    public PhpIniMigrationService(IPhpMigrationOverrideStore? overrideStore = null)
+    {
+        _overrideStore = overrideStore ?? new PhpMigrationOverrideStore();
+    }
+
     public PhpIniMigrationResult Migrate(string currentIniPath, string newPhpRoot, string? targetVersion = null)
     {
         if (!File.Exists(currentIniPath))
@@ -93,8 +100,23 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
             warnings.Add($"새 PHP 패키지/호환 확장에서 찾지 못해 비활성화: {configuredName}");
         }
 
+        var finalText = string.Join(Environment.NewLine, migrated);
+        if (!string.IsNullOrWhiteSpace(targetVersion))
+        {
+            var xamppRoot = ResolveXamppRootFromIni(currentIniPath);
+            if (xamppRoot is not null)
+            {
+                var reviewed = _overrideStore.TryLoad(xamppRoot, targetVersion, currentIniPath);
+                if (reviewed is not null)
+                {
+                    finalText = reviewed.IniText;
+                    warnings.Add($"사용자가 확정한 php.ini 마이그레이션안을 적용했습니다. 확정 시각: {reviewed.ConfirmedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}");
+                }
+            }
+        }
+
         var destination = Path.Combine(newPhpRoot, "php.ini");
-        File.WriteAllText(destination, string.Join(Environment.NewLine, migrated));
+        File.WriteAllText(destination, finalText);
         File.Copy(currentIniPath, Path.Combine(newPhpRoot, "php.ini.xampp-updater-original"), overwrite: true);
         return new PhpIniMigrationResult(true, destination, warnings);
     }
@@ -167,6 +189,27 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
             }
 
             return Path.GetFullPath(Path.Combine(newPhpRoot, configuredPath));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ResolveXamppRootFromIni(string currentIniPath)
+    {
+        try
+        {
+            var phpDirectory = Directory.GetParent(currentIniPath)?.FullName;
+            if (string.IsNullOrWhiteSpace(phpDirectory)) return null;
+            var name = Path.GetFileName(phpDirectory);
+            if (name.Equals("php", StringComparison.OrdinalIgnoreCase) ||
+                name.StartsWith(".xampp-updater-php-old-", StringComparison.OrdinalIgnoreCase))
+            {
+                return Directory.GetParent(phpDirectory)?.FullName;
+            }
+
+            return null;
         }
         catch
         {
