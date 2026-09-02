@@ -12,6 +12,7 @@ public partial class MainWindow
 {
     private readonly IApacheUpdateExecutor _apacheUpdateExecutor = new ApacheUpdateExecutor();
     private readonly IApacheMigrationReviewService _apacheMigrationReviewService = new ApacheMigrationReviewService();
+    private readonly IApacheMigrationOverrideStore _apacheMigrationOverrideStore = new ApacheMigrationOverrideStore();
     private Button? _apacheExecuteButton;
     private Button? _apacheReviewButton;
     private Button? _apacheLogButton;
@@ -21,15 +22,15 @@ public partial class MainWindow
     private void InitializeApachePhase4Ui()
     {
         if (_apacheExecuteButton is not null) return;
-        if (ApacheDiffButton.Parent is not StackPanel actionPanel) return;
+        if (ApacheDiffButton.Parent is not Panel actionPanel) return;
 
         _apacheReviewButton = new Button
         {
             Content = "마이그레이션 검토",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
-            ToolTip = "새 Apache 바이너리로 현재 conf와 참조 모듈을 실제 교체 전에 사전 검증합니다."
+            ToolTip = "새 Apache 바이너리로 현재 conf와 참조 모듈을 실제 교체 전에 검증하고 설정을 직접 편집·확정합니다."
         };
         _apacheReviewButton.Click += ApacheReviewButton_Click;
         actionPanel.Children.Add(_apacheReviewButton);
@@ -37,7 +38,7 @@ public partial class MainWindow
         _apacheExecuteButton = new Button
         {
             Content = "Apache 업데이트 실행",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
             ToolTip = "사전 설정 검증 후 준비된 패키지와 롤백 백업으로 Apache를 실제 교체하고 실패 시 자동 롤백합니다."
@@ -48,7 +49,7 @@ public partial class MainWindow
         _apacheLogButton = new Button
         {
             Content = "최근 로그 열기",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = _executionLogService.FindLatest("Apache") is not null,
             ToolTip = "%LOCALAPPDATA%\\XamppUpdater\\Logs에 저장된 최근 Apache 업데이트 로그를 엽니다."
@@ -86,7 +87,19 @@ public partial class MainWindow
                            string.Equals(package.Version, target.Version, StringComparison.OrdinalIgnoreCase);
 
         if (_apacheReviewButton is not null)
+        {
             _apacheReviewButton.IsEnabled = packageReady && !_apacheUpdateRunning && !_apacheReviewRunning;
+            if (packageReady)
+            {
+                var confRoot = Path.Combine(_lastInstallation.RootPath, "apache", "conf");
+                var reviewed = _apacheMigrationOverrideStore.TryLoad(_lastInstallation.RootPath, target!.Version, confRoot);
+                _apacheReviewButton.Content = reviewed is null ? "마이그레이션 검토" : "마이그레이션 검토 ✓";
+            }
+            else
+            {
+                _apacheReviewButton.Content = "마이그레이션 검토";
+            }
+        }
 
         if (_apacheUpdateRunning || _apacheReviewRunning || !packageReady)
         {
@@ -126,18 +139,40 @@ public partial class MainWindow
                 await _apacheMigrationReviewService.BuildAsync(installation, target, package));
 
             var confRoot = Path.Combine(installation.RootPath, "apache", "conf");
-            new ApacheMigrationReviewWindow(review, confRoot) { Owner = this }.ShowDialog();
+            var dialog = new ApacheMigrationReviewWindow(review, confRoot) { Owner = this };
+            if (dialog.ShowDialog() != true || dialog.FinalFiles is null)
+            {
+                StatusText.Text = "Apache 설정 마이그레이션 검토를 취소했습니다.";
+                return;
+            }
 
-            if (review.SyntaxValid)
+            var saved = _apacheMigrationOverrideStore.Save(
+                installation.RootPath,
+                target.Version,
+                confRoot,
+                dialog.FinalFiles);
+            AppendDetail(XamppComponentType.Apache, "Apache 설정 마이그레이션 적용안 확정: " + saved);
+
+            SetBusy(true, $"Apache {target.Version} 편집 설정 재검증 중...");
+            var verified = await Task.Run(async () =>
+                await _apacheMigrationReviewService.BuildAsync(installation, target, package));
+
+            if (verified.SyntaxValid)
             {
                 AppendDetail(XamppComponentType.Apache,
-                    $"Apache {target.Version} 설정 사전 검증 통과: conf {review.ConfigurationFiles.Count}개 / 자동 처리 {review.AutomaticChangeCount}");
-                StatusText.Text = $"Apache {target.Version} 설정 사전 검증 통과";
+                    $"Apache {target.Version} 편집 설정 사전 검증 통과: conf {verified.ConfigurationFiles.Count}개");
+                StatusText.Text = $"Apache {target.Version} 설정 적용안 확정 및 검증 통과";
             }
             else
             {
-                AppendDetail(XamppComponentType.Apache, "Apache 설정 사전 검증 실패: " + review.ValidationOutput);
-                StatusText.Text = $"Apache {target.Version} 설정 사전 검증 실패";
+                AppendDetail(XamppComponentType.Apache, "Apache 편집 설정 사전 검증 실패: " + verified.ValidationOutput);
+                StatusText.Text = $"Apache {target.Version} 설정 적용안은 저장됐지만 사전 검증에 실패했습니다.";
+                MessageBox.Show(this,
+                    "편집한 Apache 설정은 저장됐지만 대상 Apache의 httpd -t 검증에 실패했습니다.\n\n" + verified.ValidationOutput +
+                    "\n\n마이그레이션 검토를 다시 열어 수정하세요. 실제 업데이트는 이 상태에서 실행되지 않습니다.",
+                    "Apache 설정 마이그레이션",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
         }
         catch (Exception ex)
@@ -198,9 +233,10 @@ public partial class MainWindow
 
         if (!precheck.SyntaxValid)
         {
-            new ApacheMigrationReviewWindow(precheck, Path.Combine(installation.RootPath, "apache", "conf")) { Owner = this }.ShowDialog();
+            var confRoot = Path.Combine(installation.RootPath, "apache", "conf");
+            new ApacheMigrationReviewWindow(precheck, confRoot) { Owner = this }.ShowDialog();
             MessageBox.Show(this,
-                "현재 Apache 설정이 대상 버전의 사전 검증을 통과하지 못했습니다. 실제 업데이트는 실행하지 않습니다.",
+                "현재 Apache 설정 적용안이 대상 버전의 사전 검증을 통과하지 못했습니다. 실제 업데이트는 실행하지 않습니다.",
                 "Apache 업데이트",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
@@ -210,8 +246,8 @@ public partial class MainWindow
         var confirmation = MessageBox.Show(
             this,
             $"Apache를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
-            "대상 Apache 바이너리로 현재 설정의 httpd -t 사전 검증을 통과했습니다. " +
-            "현재 conf 설정을 보존하고, 새 패키지에 없는 참조 모듈은 필요한 경우 기존 설치에서 보존합니다. " +
+            "대상 Apache 바이너리로 최종 설정의 httpd -t 사전 검증을 통과했습니다. " +
+            "확정한 설정이 있으면 해당 적용안을 사용하며, 새 패키지에 없는 참조 모듈은 필요한 경우 기존 설치에서 보존합니다. " +
             "실제 교체 후에도 다시 검증하며 실패 시 기존 Apache로 자동 롤백합니다. 계속하시겠습니까?",
             "Apache 업데이트 실행",
             MessageBoxButton.YesNo,
