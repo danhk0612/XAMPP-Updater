@@ -50,11 +50,13 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(value => new { Value = value, Parsed = TryVersion(value) })
             .Where(item => item.Parsed is not null && (current is null || item.Parsed.CompareTo(current) > 0))
+            .GroupBy(item => $"{item.Parsed!.Major}.{item.Parsed.Minor}")
+            .Select(group => group.OrderByDescending(item => item.Parsed).First())
             .OrderByDescending(item => item.Parsed)
             .Select(item => new SelectableVersionEntry(
                 XamppComponentType.Apache,
                 item.Value,
-                "ASF 공식 릴리스",
+                $"Apache {item.Parsed!.Major}.{item.Parsed.Minor}.x 최신",
                 null,
                 null))
             .ToArray();
@@ -96,11 +98,13 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
                 .OrderBy(item => item.IsNts)
                 .ThenByDescending(item => item.FileName, StringComparer.OrdinalIgnoreCase)
                 .First())
+            .GroupBy(item => $"{item.Parsed!.Major}.{item.Parsed.Minor}")
+            .Select(group => group.OrderByDescending(item => item.Parsed).First())
             .OrderByDescending(item => item.Parsed)
             .Select(item => new SelectableVersionEntry(
                 XamppComponentType.Php,
                 item.VersionText,
-                "PHP Windows 공식 archive",
+                $"PHP {item.Parsed!.Major}.{item.Parsed.Minor}.x 최신",
                 $"https://downloads.php.net/~windows/releases/archives/{item.FileName}",
                 item.FileName))
             .ToArray();
@@ -141,20 +145,29 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
         }
 
         var current = TryVersion(currentVersion);
-        return MariaDbVersionRegex().Matches(WebUtility.HtmlDecode(html))
+        var latest = MariaDbVersionRegex().Matches(WebUtility.HtmlDecode(html))
             .Select(match => match.Groups["version"].Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(value => new { Value = value, Parsed = TryVersion(value) })
             .Where(item => item.Parsed is not null && (current is null || item.Parsed.CompareTo(current) > 0))
             .OrderByDescending(item => item.Parsed)
-            .Select(item => new SelectableVersionEntry(
+            .FirstOrDefault();
+
+        if (latest is null)
+        {
+            return Array.Empty<SelectableVersionEntry>();
+        }
+
+        return new[]
+        {
+            new SelectableVersionEntry(
                 XamppComponentType.MariaDb,
-                item.Value,
-                series.IsEol ? "MariaDB 공식 (EOL 계열)" : "MariaDB 공식",
-                $"https://dlm.mariadb.com/browse/mariadb_server/{item.Value}/winx64-packages/",
-                $"mariadb-{item.Value}-winx64.zip",
-                series.IsEol))
-            .ToArray();
+                latest.Value,
+                series.IsEol ? $"MariaDB {series.Series}.x 최신 (EOL)" : $"MariaDB {series.Series}.x 최신",
+                $"https://dlm.mariadb.com/browse/mariadb_server/{latest.Value}/winx64-packages/",
+                $"mariadb-{latest.Value}-winx64.zip",
+                series.IsEol)
+        };
     }
 
     private async Task<IReadOnlyList<SelectableVersionEntry>> GetApacheEntriesAsync(
@@ -246,7 +259,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
 
     internal sealed record MariaDbSeriesEntry(string Series, bool IsEol);
 
-    [GeneratedRegex(@"(?:httpd-|CHANGES_)(?<version>2\.4\.\d+)(?:\.tar\.(?:bz2|gz|xz))?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?:httpd-|CHANGES_)(?<version>2\.\d+\.\d+)(?:\.tar\.(?:bz2|gz|xz))?", RegexOptions.IgnoreCase)]
     private static partial Regex ApacheArchiveVersionRegex();
 
     [GeneratedRegex(@"(?<file>php-(?<version>\d+\.\d+\.\d+)(?:-[0-9]+)?-(?<nts>nts-)?Win32-(?:vc\d+|vs\d+)-(?<arch>x64|x86)\.zip)", RegexOptions.IgnoreCase)]
