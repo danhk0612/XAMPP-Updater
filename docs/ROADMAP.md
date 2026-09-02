@@ -83,12 +83,11 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] 작업을 자동 / 보조 / 사용자 확인 단계로 분류
 - [x] PHP 메이저/마이너 변경 시 php.ini/확장/Apache SAPI 마이그레이션 계획 생성
 - [x] MariaDB 계열 변경 시 중간 업그레이드 단계가 필요한 경로로 계획 생성
-- [x] 현재 버전보다 높은 공식 과거/현재 릴리스 목록 조회
-- [x] PHP Windows archive의 각 선택 버전에 실제 ZIP URL 연결
-- [x] MariaDB 공식 DLM의 각 버전에 공식 winx64 패키지 페이지 연결
-- [x] Apache ASF 릴리스 목록을 선택지로 제공하고 Windows 바이너리 미확정 버전은 패키지 지정 흐름 유지
-- [x] 공식/사용자 ZIP 직접 지정 기능
-- [x] 선택 버전 catalog parser smoke test
+- [x] 선택 목록을 각 major.minor 계열의 최신 패치 1개로 축약
+- [x] PHP 계열별 최신 Windows 패키지 정보 연결
+- [x] MariaDB 계열별 최신 공식 winx64 패키지 페이지 연결
+- [x] Apache ASF 릴리스에서 계열별 최신 버전 선택지 생성
+- [x] 계열별 최신 필터 parser smoke test
 - [ ] 선택한 Apache 버전의 Windows ZIP URL을 가능한 공급원에서 추가 자동 탐색
 - [ ] MariaDB 선택 버전 패키지 페이지에서 실제 ZIP/manifest/PGP 링크 해석
 - [ ] SHA256/PGP 등 검증 메타데이터 확보
@@ -97,11 +96,10 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 ### Phase 2 완료 조건
 
 1. 최신 버전과 XAMPP 공식 번들 기준 버전을 구분하여 표시한다.
-2. 사용자가 최신을 포함한 원하는 업데이트 버전을 선택할 수 있다.
+2. 사용자가 최신 및 각 major.minor 계열의 최신 버전을 선택할 수 있다.
 3. 현재 버전에서 선택 버전으로 이동하기 위해 필요한 작업을 자동 계산한다.
 4. 각 작업을 자동 처리 / 보조 처리 / 사용자 확인으로 분류한다.
 5. 실제 다운로드 전에 아키텍처, 런타임, Thread Safe/ABI, MariaDB 업그레이드 경로를 확인한다.
-6. 완전 자동 검증이 불가능한 패키지도 공식 출처 확인/직접 지정 + 내부 검증을 통해 보조 업데이트 경로를 제공한다.
 
 > Apache/PHP/MariaDB는 단순히 최신 ZIP을 덮어쓰는 방식으로 처리하지 않는다. 자동화가 어려운 경우에도 백업 → 비교 → 사용자 확인 → 적용 → 검증 순서의 보조 업데이트를 제공한다.
 
@@ -116,7 +114,6 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - 자동 병합 가능 / 사용자 확인 필요 / 폐기 후보 분류
 - MariaDB 데이터 디렉터리 보호 정책 확정
 - 롤백에 필요한 manifest 생성
-- 사용자가 직접 지정한 공식 패키지의 내부 메타데이터 재검증
 
 ## Phase 4 — Assisted Update Engine
 
