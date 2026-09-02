@@ -10,6 +10,15 @@ public partial class MainWindow
     private readonly ILocalStorageCleanupService _cleanupService = new LocalStorageCleanupService();
     private Button? _cleanupButton;
 
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (_cleanupButton is null)
+        {
+            InitializeCleanupUi();
+        }
+    }
+
     private void InitializeCleanupUi()
     {
         var toolbar = RootGrid.Children
