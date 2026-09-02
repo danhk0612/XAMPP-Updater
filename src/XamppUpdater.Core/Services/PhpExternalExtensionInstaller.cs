@@ -235,7 +235,7 @@ public sealed partial class PhpExternalExtensionInstaller : IPhpExternalExtensio
         await input.CopyToAsync(output, cancellationToken);
     }
 
-    [GeneratedRegex(@"<a[^>]+href=[\"'](?<href>[^\"']+)[\"'][^>]*>(?<text>[^<]+)</a>", RegexOptions.IgnoreCase)]
+    [GeneratedRegex("<a[^>]+href=[\\\"'](?<href>[^\\\"']+)[\\\"'][^>]*>(?<text>[^<]+)</a>", RegexOptions.IgnoreCase)]
     private static partial Regex AnchorRegex();
 
     [GeneratedRegex(@"(?<version>\d+\.\d+(?:\.\d+)?)\s*</a>\s*</td>\s*<td[^>]*>\s*stable\b", RegexOptions.IgnoreCase)]
