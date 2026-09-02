@@ -9,7 +9,7 @@ CheckVersion(XamppComponentType.MariaDb, "mysqld  Ver 15.1 Distrib 10.4.32-Maria
 CheckVersion(XamppComponentType.MariaDb, "mariadbd  Ver 11.8.3-MariaDB for Win64 on AMD64", "11.8.3");
 
 CheckServiceImagePath(
-    @"\"C:\xampp\mysql\bin\mysqld.exe\" --defaults-file=\"C:\xampp\mysql\bin\my.ini\" mysql",
+    "\"C:\\xampp\\mysql\\bin\\mysqld.exe\" --defaults-file=\"C:\\xampp\\mysql\\bin\\my.ini\" mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
 CheckServiceImagePath(
     @"C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini mysql",
