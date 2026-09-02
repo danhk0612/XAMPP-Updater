@@ -55,14 +55,14 @@
                         <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="업데이트 버전" />
                         <ComboBox x:Name="ApacheTargetComboBox" Height="32" DisplayMemberPath="DisplayText" SelectionChanged="TargetVersion_SelectionChanged" IsEnabled="False" />
                         <TextBlock x:Name="ApachePlanText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="업데이트 경로: 온라인 확인 후 선택할 수 있습니다." />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button x:Name="ApachePreflightButton" Padding="12,5" Content="준비 점검" Tag="Apache" Click="PreflightButton_Click" IsEnabled="False" />
-                            <Button x:Name="ApacheBackupButton" Margin="8,0,0,0" Padding="12,5" Content="백업 생성" Tag="Apache" Click="BackupButton_Click" IsEnabled="False" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                            <Button x:Name="ApachePackageButton" Padding="12,5" Content="패키지 준비" Tag="Apache" Click="PackageButton_Click" IsEnabled="False" />
-                            <Button x:Name="ApacheDiffButton" Margin="8,0,0,0" Padding="12,5" Content="설정 비교" Tag="Apache" Click="DiffButton_Click" IsEnabled="False" />
-                        </StackPanel>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="ApachePreflightButton" Margin="0,0,8,6" Padding="12,5" Content="준비 점검" Tag="Apache" Click="PreflightButton_Click" IsEnabled="False" />
+                            <Button x:Name="ApacheBackupButton" Margin="0,0,8,6" Padding="12,5" Content="백업 생성" Tag="Apache" Click="BackupButton_Click" IsEnabled="False" />
+                        </WrapPanel>
+                        <WrapPanel Margin="0,1,0,0">
+                            <Button x:Name="ApachePackageButton" Margin="0,0,8,6" Padding="12,5" Content="패키지 준비" Tag="Apache" Click="PackageButton_Click" IsEnabled="False" />
+                            <Button x:Name="ApacheDiffButton" Margin="0,0,8,6" Padding="12,5" Content="설정 비교" Tag="Apache" Click="DiffButton_Click" IsEnabled="False" />
+                        </WrapPanel>
                         <TextBlock x:Name="ApachePreflightText" Margin="0,7,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="준비 점검: 대상 버전 선택 후 실행할 수 있습니다." />
                         <TextBlock x:Name="ApacheCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
                         <Separator Margin="0,12,0,8" />
@@ -82,14 +82,14 @@
                         <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="업데이트 버전" />
                         <ComboBox x:Name="PhpTargetComboBox" Height="32" DisplayMemberPath="DisplayText" SelectionChanged="TargetVersion_SelectionChanged" IsEnabled="False" />
                         <TextBlock x:Name="PhpPlanText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="업데이트 경로: 온라인 확인 후 선택할 수 있습니다." />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button x:Name="PhpPreflightButton" Padding="12,5" Content="준비 점검" Tag="Php" Click="PreflightButton_Click" IsEnabled="False" />
-                            <Button x:Name="PhpBackupButton" Margin="8,0,0,0" Padding="12,5" Content="백업 생성" Tag="Php" Click="BackupButton_Click" IsEnabled="False" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                            <Button x:Name="PhpPackageButton" Padding="12,5" Content="패키지 준비" Tag="Php" Click="PackageButton_Click" IsEnabled="False" />
-                            <Button x:Name="PhpDiffButton" Margin="8,0,0,0" Padding="12,5" Content="설정 비교" Tag="Php" Click="DiffButton_Click" IsEnabled="False" />
-                        </StackPanel>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="PhpPreflightButton" Margin="0,0,8,6" Padding="12,5" Content="준비 점검" Tag="Php" Click="PreflightButton_Click" IsEnabled="False" />
+                            <Button x:Name="PhpBackupButton" Margin="0,0,8,6" Padding="12,5" Content="백업 생성" Tag="Php" Click="BackupButton_Click" IsEnabled="False" />
+                        </WrapPanel>
+                        <WrapPanel Margin="0,1,0,0">
+                            <Button x:Name="PhpPackageButton" Margin="0,0,8,6" Padding="12,5" Content="패키지 준비" Tag="Php" Click="PackageButton_Click" IsEnabled="False" />
+                            <Button x:Name="PhpDiffButton" Margin="0,0,8,6" Padding="12,5" Content="설정 비교" Tag="Php" Click="DiffButton_Click" IsEnabled="False" />
+                        </WrapPanel>
                         <TextBlock x:Name="PhpPreflightText" Margin="0,7,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="준비 점검: 대상 버전 선택 후 실행할 수 있습니다." />
                         <TextBlock x:Name="PhpCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
                         <Separator Margin="0,12,0,8" />
@@ -109,14 +109,14 @@
                         <TextBlock Margin="0,12,0,4" FontWeight="SemiBold" Text="업데이트 버전" />
                         <ComboBox x:Name="MariaDbTargetComboBox" Height="32" DisplayMemberPath="DisplayText" SelectionChanged="TargetVersion_SelectionChanged" IsEnabled="False" />
                         <TextBlock x:Name="MariaDbPlanText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="업데이트 경로: 온라인 확인 후 선택할 수 있습니다." />
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button x:Name="MariaDbPreflightButton" Padding="12,5" Content="준비 점검" Tag="MariaDb" Click="PreflightButton_Click" IsEnabled="False" />
-                            <Button x:Name="MariaDbBackupButton" Margin="8,0,0,0" Padding="12,5" Content="백업 생성" Tag="MariaDb" Click="BackupButton_Click" IsEnabled="False" />
-                        </StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0,7,0,0">
-                            <Button x:Name="MariaDbPackageButton" Padding="12,5" Content="패키지 준비" Tag="MariaDb" Click="PackageButton_Click" IsEnabled="False" />
-                            <Button x:Name="MariaDbDiffButton" Margin="8,0,0,0" Padding="12,5" Content="설정 비교" Tag="MariaDb" Click="DiffButton_Click" IsEnabled="False" />
-                        </StackPanel>
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button x:Name="MariaDbPreflightButton" Margin="0,0,8,6" Padding="12,5" Content="준비 점검" Tag="MariaDb" Click="PreflightButton_Click" IsEnabled="False" />
+                            <Button x:Name="MariaDbBackupButton" Margin="0,0,8,6" Padding="12,5" Content="백업 생성" Tag="MariaDb" Click="BackupButton_Click" IsEnabled="False" />
+                        </WrapPanel>
+                        <WrapPanel Margin="0,1,0,0">
+                            <Button x:Name="MariaDbPackageButton" Margin="0,0,8,6" Padding="12,5" Content="패키지 준비" Tag="MariaDb" Click="PackageButton_Click" IsEnabled="False" />
+                            <Button x:Name="MariaDbDiffButton" Margin="0,0,8,6" Padding="12,5" Content="설정 비교" Tag="MariaDb" Click="DiffButton_Click" IsEnabled="False" />
+                        </WrapPanel>
                         <TextBlock x:Name="MariaDbPreflightText" Margin="0,7,0,0" TextWrapping="Wrap" Foreground="DarkSlateGray" Text="준비 점검: 대상 버전 선택 후 실행할 수 있습니다." />
                         <TextBlock x:Name="MariaDbCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
                         <Separator Margin="0,12,0,8" />
