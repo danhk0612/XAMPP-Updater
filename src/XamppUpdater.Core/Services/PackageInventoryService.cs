@@ -84,13 +84,14 @@ public static class PackageInventoryService
     {
         var targetNames = package
             .Where(path => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && path.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
-            .Select(Path.GetFileName)
+            .Select(path => Path.GetFileName(path) ?? string.Empty)
+            .Where(name => name.Length > 0)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         return current
             .Where(path => path.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && path.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
-            .Select(Path.GetFileName)
-            .Where(name => !targetNames.Contains(name))
+            .Select(path => Path.GetFileName(path) ?? string.Empty)
+            .Where(name => name.Length > 0 && !targetNames.Contains(name))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
