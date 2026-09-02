@@ -82,17 +82,18 @@ public partial class MainWindow
             return;
         }
 
-        var packageReady = ApacheTargetComboBox.SelectedItem is UpdateTargetOption target &&
+        var target = ApacheTargetComboBox.SelectedItem as UpdateTargetOption;
+        var packageReady = target is not null &&
                            _packageResults.TryGetValue(XamppComponentType.Apache, out var package) &&
                            string.Equals(package.Version, target.Version, StringComparison.OrdinalIgnoreCase);
 
         if (_apacheReviewButton is not null)
         {
             _apacheReviewButton.IsEnabled = packageReady && !_apacheUpdateRunning && !_apacheReviewRunning;
-            if (packageReady)
+            if (packageReady && target is not null)
             {
                 var confRoot = Path.Combine(_lastInstallation.RootPath, "apache", "conf");
-                var reviewed = _apacheMigrationOverrideStore.TryLoad(_lastInstallation.RootPath, target!.Version, confRoot);
+                var reviewed = _apacheMigrationOverrideStore.TryLoad(_lastInstallation.RootPath, target.Version, confRoot);
                 _apacheReviewButton.Content = reviewed is null ? "마이그레이션 검토" : "마이그레이션 검토 ✓";
             }
             else
@@ -101,7 +102,7 @@ public partial class MainWindow
             }
         }
 
-        if (_apacheUpdateRunning || _apacheReviewRunning || !packageReady)
+        if (_apacheUpdateRunning || _apacheReviewRunning || !packageReady || target is null)
         {
             _apacheExecuteButton.IsEnabled = false;
             return;
@@ -118,7 +119,7 @@ public partial class MainWindow
             _lastInstallation.RootPath,
             XamppComponentType.Apache,
             current,
-            target!.Version) is not null;
+            target.Version) is not null;
     }
 
     private async void ApacheReviewButton_Click(object sender, RoutedEventArgs e)
