@@ -18,10 +18,14 @@ public interface IApacheUpdateExecutor
 public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
 {
     private readonly IWindowsServiceController _serviceController;
+    private readonly IApacheMigrationOverrideStore _overrideStore;
 
-    public ApacheUpdateExecutor(IWindowsServiceController? serviceController = null)
+    public ApacheUpdateExecutor(
+        IWindowsServiceController? serviceController = null,
+        IApacheMigrationOverrideStore? overrideStore = null)
     {
         _serviceController = serviceController ?? new WindowsServiceController();
+        _overrideStore = overrideStore ?? new ApacheMigrationOverrideStore();
     }
 
     public async Task<UpdateExecutionResult> ExecuteAsync(
@@ -78,6 +82,16 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
 
             PreserveConfiguration(oldRoot, apacheRoot);
             steps.Add("기존 Apache conf 설정 보존 완료");
+
+            var reviewed = _overrideStore.TryLoad(
+                xamppRoot,
+                target.Version,
+                Path.Combine(oldRoot, "conf"));
+            if (reviewed is not null)
+            {
+                ApplyReviewedConfiguration(Path.Combine(apacheRoot, "conf"), reviewed.Files);
+                steps.Add($"사용자가 확정한 Apache 설정 적용안 반영: {reviewed.Files.Count}개 파일");
+            }
 
             var preservedModules = PreserveReferencedModules(oldRoot, apacheRoot);
             if (preservedModules.Count > 0)
@@ -223,6 +237,19 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
         if (!Directory.Exists(oldConf)) return;
         if (Directory.Exists(newConf)) Directory.Delete(newConf, recursive: true);
         CopyDirectory(oldConf, newConf, overwrite: true);
+    }
+
+    private static void ApplyReviewedConfiguration(string confRoot, IReadOnlyDictionary<string, string> files)
+    {
+        foreach (var pair in files)
+        {
+            var relative = pair.Key.Replace('/', Path.DirectorySeparatorChar);
+            var destination = Path.GetFullPath(Path.Combine(confRoot, relative));
+            if (!IsUnderRoot(destination, confRoot))
+                throw new InvalidOperationException("Apache 검토 설정 경로가 conf 디렉터리를 벗어납니다: " + pair.Key);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllText(destination, pair.Value);
+        }
     }
 
     private static IReadOnlyList<string> PreserveReferencedModules(string oldRoot, string newRoot)
