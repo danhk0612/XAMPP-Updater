@@ -11,6 +11,7 @@ Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB만** 
 - 업데이트 전 설정/데이터 백업
 - 기존 설정과 새 기본 설정 비교
 - 필요한 설정 복원 또는 선택적 병합
+- 완전 자동화가 어려운 경우에도 비교/선택/확인 단계를 포함한 보조 업데이트 제공
 
 XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리는 범위 밖이다.
 
@@ -58,8 +59,6 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] Apache 설정에서 실제 PHP `LoadModule` 연동 방식 감지
 - [x] MariaDB 현재 major.minor 계열 감지
 - [x] 설치 환경과 XAMPP 공식 버전을 비교한 1차 호환성 판정
-- [x] PHP 메이저 변경 자동 적용 보류
-- [x] MariaDB 다른 major.minor 계열 직접 교체 금지
 - [x] 실제 Windows 11 환경에서 로컬 호환성 프로파일 검증
 
 후보 패키지 판정:
@@ -67,9 +66,9 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] Apache Lounge Windows ZIP 후보 탐색 및 version/arch/compiler 메타데이터 추출
 - [x] PHP Windows archive에서 현재 major.minor / arch / TS / compiler 일치 패치 후보 탐색
 - [x] MariaDB 공식 다운로드에서 현재 major.minor 계열 최신 winx64 후보 탐색
-- [x] 호환 / 조건부 / 차단 / 후보 없음 상태를 패키지 단위로 모델링
-- [x] 검증 해시를 확보하지 못한 PHP archive 후보 자동 적용 차단
-- [x] GUI에서 실제 후보 버전과 판정 상태 표시
+- [x] 후보 상태를 `자동 가능 / 보조 업데이트 / 검토 후 진행 / 후보 없음`으로 모델링
+- [x] 해시가 없는 PHP archive도 보조 업데이트 후보로 유지
+- [x] GUI에서 실제 후보 버전과 자동화 수준 표시
 - [ ] Apache 후보 ZIP 내부 모듈/의존 DLL 기준 ABI 세부 검증
 - [ ] PHP 후보 ZIP의 Extension Build / Apache SAPI DLL을 실제 압축 내용 기준으로 검증
 - [ ] MariaDB SHA256 manifest 실제 값 확보 및 ZIP 해시와 연결
@@ -81,34 +80,39 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [ ] 특정 버전 선택 UI
 - [ ] 선택 버전별 패키지 URL 결정
 - [ ] SHA256/PGP 등 검증 메타데이터 확보
-- [ ] 다운로드 전 호환성 판정 결과 표시
+- [ ] 공식 패키지 직접 지정 기능
+- [ ] 다운로드 전 자동화 수준과 필요한 사용자 작업 표시
 
 ### Phase 2 완료 조건
 
 1. 최신 버전과 XAMPP 공식 번들 기준 버전을 구분하여 표시한다.
 2. 사용자가 선택 가능한 버전 목록을 제공한다.
-3. 각 후보가 현재 설치에 적용 가능한지 자동 판정한다.
+3. 각 후보가 현재 설치에 적용 가능한지와 필요한 사용자 개입 수준을 자동 판정한다.
 4. 실제 다운로드 전에 아키텍처, 런타임, Thread Safe/ABI, MariaDB 업그레이드 경로를 확인한다.
-5. 해시 또는 서명 검증 정보를 확보하지 못한 패키지는 자동 업데이트 대상으로 허용하지 않는다.
+5. 완전 자동 검증이 불가능한 패키지도 공식 출처 확인/직접 지정 + 내부 검증을 통해 보조 업데이트 경로를 제공한다.
 
-> Apache/PHP/MariaDB는 단순히 최신 ZIP을 덮어쓰는 방식으로 처리하지 않는다. Phase 2에서 공급원과 호환성 규칙을 먼저 확정한다.
+> Apache/PHP/MariaDB는 단순히 최신 ZIP을 덮어쓰는 방식으로 처리하지 않는다. 자동화가 어려운 경우에도 백업 → 비교 → 사용자 확인 → 적용 → 검증 순서의 보조 업데이트를 제공한다.
 
-## Phase 3 — Backup & Preflight
+## Phase 3 — Backup, Compare & Preflight
 
 - 실행 중 프로세스 및 Windows 서비스 상태 점검
 - 업데이트 대상 파일 잠금 여부 확인
-- 구성요소별 설정 파일 목록 정의
+- 구성요소별 설정/확장/모듈 파일 manifest 생성
 - 업데이트 전 자동 백업
+- 신규 패키지와 기존 설치의 파일 구조 비교
+- 기존 설정과 신규 기본 설정 diff 생성
+- 자동 병합 가능 / 사용자 확인 필요 / 폐기 후보 분류
 - MariaDB 데이터 디렉터리 보호 정책 확정
 - 롤백에 필요한 manifest 생성
+- 사용자가 직접 지정한 공식 패키지의 내부 메타데이터 재검증
 
-## Phase 4 — Update Engine
+## Phase 4 — Assisted Update Engine
 
-- Apache 업데이트 전략
-- PHP 업데이트 전략
-- MariaDB 업데이트 전략
-- 서비스 중지/재시작
-- 원자적 교체가 가능한 범위 정의
+- 업데이트 단계별 실행 계획 화면
+- Apache 서비스 중지 → 백업 → 패키지 교체 → 설정/모듈 복원 → 구성 검사 → 재시작
+- PHP 백업 → 패키지 교체 → php.ini/확장 설정 비교 및 선택 병합 → Apache SAPI 재검증
+- MariaDB 서비스 중지 → 전체 데이터/설정 백업 → 바이너리 교체 → `mariadb-upgrade` → 상태 검증 → 재시작
+- 자동 처리 불가능한 충돌은 해당 단계에서만 사용자 선택 요청
 - 실패 시 자동 롤백
 - 최신/선택 버전 업데이트 실행
 
@@ -119,6 +123,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - 구성요소별 복원 후보 표시
 - 선택 복원/병합
 - 충돌이 있는 설정은 자동 덮어쓰기하지 않음
+- 업데이트 전/후 설정 비교 이력 제공
 
 ## Phase 6 — Packaging & Release
 
