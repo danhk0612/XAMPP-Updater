@@ -9,6 +9,11 @@ public partial class MainWindow : Window
 {
     private readonly IXamppInstallationDetector _detector = new XamppInstallationDetector();
     private readonly IOnlineVersionCatalogService _onlineCatalog = new OnlineVersionCatalogService();
+    private readonly IInstallationCompatibilityDetector _compatibilityDetector = new InstallationCompatibilityDetector();
+
+    private XamppInstallation? _lastInstallation;
+    private InstallationCompatibilityProfile? _lastProfile;
+    private OnlineVersionCatalog? _lastCatalog;
 
     public MainWindow()
     {
@@ -90,14 +95,29 @@ public partial class MainWindow : Window
 
     private async Task InspectAsync(string path, string source)
     {
-        SetBusy(true, "구성요소 버전 확인 중...");
+        SetBusy(true, "설치 버전과 호환성 정보를 확인하는 중...");
 
         try
         {
-            var installation = await Task.Run(() => _detector.Inspect(path, source));
-            InstallPathComboBox.Text = installation.RootPath;
-            RenderInstallation(installation);
-            StatusText.Text = $"확인 완료: {installation.RootPath} ({installation.DiscoverySource})";
+            var result = await Task.Run(() =>
+            {
+                var installation = _detector.Inspect(path, source);
+                var profile = _compatibilityDetector.Detect(installation.RootPath, installation);
+                return (installation, profile);
+            });
+
+            _lastInstallation = result.installation;
+            _lastProfile = result.profile;
+            InstallPathComboBox.Text = result.installation.RootPath;
+            RenderInstallation(result.installation);
+            RenderCompatibilityProfile(result.profile);
+
+            if (_lastCatalog is not null)
+            {
+                RenderOnlineCatalog(_lastCatalog);
+            }
+
+            StatusText.Text = $"확인 완료: {result.installation.RootPath} ({result.installation.DiscoverySource})";
         }
         catch (Exception ex)
         {
@@ -115,9 +135,9 @@ public partial class MainWindow : Window
 
         try
         {
-            var catalog = await _onlineCatalog.GetLatestAsync();
-            RenderOnlineCatalog(catalog);
-            StatusText.Text = $"온라인 확인 완료: {catalog.CheckedAt:yyyy-MM-dd HH:mm:ss}";
+            _lastCatalog = await _onlineCatalog.GetLatestAsync();
+            RenderOnlineCatalog(_lastCatalog);
+            StatusText.Text = $"온라인 확인 완료: {_lastCatalog.CheckedAt:yyyy-MM-dd HH:mm:ss}";
         }
         catch (Exception ex)
         {
@@ -158,29 +178,51 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RenderCompatibilityProfile(InstallationCompatibilityProfile profile)
+    {
+        var apacheIntegration = profile.ApachePhpIntegration.IsModuleLoaded
+            ? $"PHP module: {profile.ApachePhpIntegration.ModuleName}"
+            : "PHP module 미감지";
+        ApacheEnvironmentText.Text = $"환경: {CompatibilityEvaluator.FormatArchitecture(profile.ApacheArchitecture)} / {apacheIntegration}";
+
+        var threadSafety = profile.Php.ThreadSafe switch
+        {
+            true => "Thread Safe",
+            false => "Non Thread Safe",
+            null => "Thread Safety 미상"
+        };
+        PhpEnvironmentText.Text = $"환경: {CompatibilityEvaluator.FormatArchitecture(profile.PhpArchitecture)} / {threadSafety} / {profile.Php.Compiler ?? "Compiler 미상"}";
+
+        MariaDbEnvironmentText.Text = $"환경: {CompatibilityEvaluator.FormatArchitecture(profile.MariaDbArchitecture)} / {profile.MariaDbSeries ?? "계열 미상"} 계열";
+    }
+
     private void RenderOnlineCatalog(OnlineVersionCatalog catalog)
     {
         foreach (var component in catalog.Components)
         {
             var upstreamText = $"upstream 최신: {component.UpstreamLatestVersion ?? "확인 실패"}";
             var xamppText = $"XAMPP 공식: {component.XamppBundledVersion ?? "확인 실패"}";
+            var installedVersion = _lastInstallation?.Components.FirstOrDefault(item => item.Type == component.Type)?.Version;
+            var compatibilityText = _lastProfile is null
+                ? component.CompatibilityNote
+                : CompatibilityEvaluator.Evaluate(component.Type, installedVersion, component, _lastProfile);
 
             switch (component.Type)
             {
                 case XamppComponentType.Apache:
                     ApacheLatestText.Text = upstreamText;
                     ApacheXamppText.Text = xamppText;
-                    ApacheCompatibilityText.Text = component.CompatibilityNote;
+                    ApacheCompatibilityText.Text = compatibilityText;
                     break;
                 case XamppComponentType.Php:
                     PhpLatestText.Text = upstreamText;
                     PhpXamppText.Text = xamppText;
-                    PhpCompatibilityText.Text = component.CompatibilityNote;
+                    PhpCompatibilityText.Text = compatibilityText;
                     break;
                 case XamppComponentType.MariaDb:
                     MariaDbLatestText.Text = upstreamText;
                     MariaDbXamppText.Text = xamppText;
-                    MariaDbCompatibilityText.Text = component.CompatibilityNote;
+                    MariaDbCompatibilityText.Text = compatibilityText;
                     break;
             }
         }
