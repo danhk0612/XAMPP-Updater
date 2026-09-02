@@ -8,9 +8,11 @@ public sealed class MariaDbCredentialsDialog : Window
 {
     private readonly TextBox _userName = new() { Text = "root", MinWidth = 260 };
     private readonly PasswordBox _password = new() { MinWidth = 260 };
-    private MariaDbCredentials? _credentials;
+    private readonly TaskCompletionSource<MariaDbCredentials?> _completion =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private MariaDbCredentials? _acceptedCredentials;
 
-    public MariaDbCredentialsDialog(Window owner)
+    private MariaDbCredentialsDialog(Window owner)
     {
         Owner = owner;
         Title = "MariaDB 인증";
@@ -43,8 +45,7 @@ public sealed class MariaDbCredentialsDialog : Window
         {
             Content = "취소",
             Width = 80,
-            Height = 30,
-            IsCancel = true
+            Height = 30
         };
         var ok = new Button
         {
@@ -54,19 +55,28 @@ public sealed class MariaDbCredentialsDialog : Window
             Margin = new Thickness(8, 0, 0, 0),
             IsDefault = true
         };
+
+        cancel.Click += (_, _) => Close();
         ok.Click += (_, _) =>
         {
-            _credentials = new MariaDbCredentials(_userName.Text.Trim(), _password.Password);
-            DialogResult = true;
+            _acceptedCredentials = new MariaDbCredentials(_userName.Text.Trim(), _password.Password);
             Close();
         };
+
         buttons.Children.Add(cancel);
         buttons.Children.Add(ok);
         panel.Children.Add(buttons);
-
         Content = panel;
+
+        Closed += (_, _) => _completion.TrySetResult(_acceptedCredentials);
     }
 
-    public MariaDbCredentials Credentials =>
-        _credentials ?? throw new InvalidOperationException("인증정보가 확정되지 않았습니다.");
+    public static Task<MariaDbCredentials?> RequestAsync(Window owner)
+    {
+        var dialog = new MariaDbCredentialsDialog(owner);
+        dialog.Show();
+        dialog.Activate();
+        _ = dialog._password.Focus();
+        return dialog._completion.Task;
+    }
 }
