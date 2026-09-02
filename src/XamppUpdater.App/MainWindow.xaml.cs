@@ -13,6 +13,7 @@ public partial class MainWindow : Window
     private readonly IInstallationCompatibilityDetector _compatibilityDetector = new InstallationCompatibilityDetector();
     private readonly ICandidatePackageCatalogService _candidateCatalog = new CandidatePackageCatalogService();
     private readonly ISelectableVersionCatalogService _selectableVersionCatalog = new SelectableVersionCatalogService();
+    private readonly IUpdatePreflightService _preflightService = new UpdatePreflightService();
 
     private XamppInstallation? _lastInstallation;
     private InstallationCompatibilityProfile? _lastProfile;
@@ -27,10 +28,7 @@ public partial class MainWindow : Window
         Loaded += async (_, _) => await AutoDetectAsync();
     }
 
-    private async void AutoDetectButton_Click(object sender, RoutedEventArgs e)
-    {
-        await AutoDetectAsync();
-    }
+    private async void AutoDetectButton_Click(object sender, RoutedEventArgs e) => await AutoDetectAsync();
 
     private async void InspectButton_Click(object sender, RoutedEventArgs e)
     {
@@ -61,10 +59,7 @@ public partial class MainWindow : Window
         await InspectAsync(dialog.FolderName, "Manual");
     }
 
-    private async void OnlineCheckButton_Click(object sender, RoutedEventArgs e)
-    {
-        await CheckOnlineVersionsAsync();
-    }
+    private async void OnlineCheckButton_Click(object sender, RoutedEventArgs e) => await CheckOnlineVersionsAsync();
 
     private void TargetVersion_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -74,6 +69,41 @@ public partial class MainWindow : Window
         }
 
         RenderSelectedPlan(target);
+        SetPreflightEnabled(target.Type, true);
+        SetPreflightText(target.Type, "준비 점검: 대상 버전에 대한 사전 점검을 실행할 수 있습니다.");
+    }
+
+    private async void PreflightButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastInstallation is null || sender is not Button button ||
+            !Enum.TryParse<XamppComponentType>(button.Tag?.ToString(), true, out var type))
+        {
+            return;
+        }
+
+        var comboBox = GetTargetComboBox(type);
+        if (comboBox.SelectedItem is not UpdateTargetOption target)
+        {
+            SetPreflightText(type, "준비 점검: 먼저 업데이트 버전을 선택하세요.");
+            return;
+        }
+
+        SetBusy(true, $"{type} 업데이트 준비 상태를 점검하는 중...");
+        try
+        {
+            var report = await Task.Run(() => _preflightService.Inspect(_lastInstallation, type, target.Version));
+            SetPreflightText(type, FormatPreflight(report));
+            StatusText.Text = $"{type} 준비 점검 완료: {report.CurrentVersion} → {report.TargetVersion}";
+        }
+        catch (Exception ex)
+        {
+            SetPreflightText(type, $"준비 점검 실패: {ex.Message}");
+            StatusText.Text = $"{type} 준비 점검 실패: {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
     private async Task AutoDetectAsync()
@@ -132,6 +162,7 @@ public partial class MainWindow : Window
             RenderCompatibilityProfile(result.profile);
             ClearCandidates();
             ClearTargetSelectors();
+            ClearPreflight();
 
             if (_lastCatalog is not null)
             {
@@ -343,21 +374,59 @@ public partial class MainWindow : Window
         return $"업데이트 경로: {plan.Summary}\n{package}\n{mainSteps}";
     }
 
+    private static string FormatPreflight(UpdatePreflightReport report)
+    {
+        var runtime = report.ServiceName is not null
+            ? $"서비스 {report.ServiceName}: {report.ServiceState ?? "상태 미상"}"
+            : report.ProcessRunning ? "프로세스: 실행 중" : "프로세스: 중지";
+        var warning = report.Warnings.Count == 0
+            ? "주의사항 없음"
+            : string.Join(" / ", report.Warnings);
+
+        return $"준비 점검: {runtime}\n" +
+               $"백업 예상: {report.BackupFileCount:N0}개 / {report.BackupSizeText}\n" +
+               $"설정 manifest: {report.ConfigFiles.Count:N0}개\n" +
+               $"백업 위치: {report.BackupDestination}\n" +
+               $"주의: {warning}";
+    }
+
     private void SetPlanText(XamppComponentType type, string text)
     {
         switch (type)
         {
-            case XamppComponentType.Apache:
-                ApachePlanText.Text = text;
-                break;
-            case XamppComponentType.Php:
-                PhpPlanText.Text = text;
-                break;
-            case XamppComponentType.MariaDb:
-                MariaDbPlanText.Text = text;
-                break;
+            case XamppComponentType.Apache: ApachePlanText.Text = text; break;
+            case XamppComponentType.Php: PhpPlanText.Text = text; break;
+            case XamppComponentType.MariaDb: MariaDbPlanText.Text = text; break;
         }
     }
+
+    private void SetPreflightText(XamppComponentType type, string text)
+    {
+        switch (type)
+        {
+            case XamppComponentType.Apache: ApachePreflightText.Text = text; break;
+            case XamppComponentType.Php: PhpPreflightText.Text = text; break;
+            case XamppComponentType.MariaDb: MariaDbPreflightText.Text = text; break;
+        }
+    }
+
+    private void SetPreflightEnabled(XamppComponentType type, bool enabled)
+    {
+        switch (type)
+        {
+            case XamppComponentType.Apache: ApachePreflightButton.IsEnabled = enabled; break;
+            case XamppComponentType.Php: PhpPreflightButton.IsEnabled = enabled; break;
+            case XamppComponentType.MariaDb: MariaDbPreflightButton.IsEnabled = enabled; break;
+        }
+    }
+
+    private ComboBox GetTargetComboBox(XamppComponentType type) => type switch
+    {
+        XamppComponentType.Apache => ApacheTargetComboBox,
+        XamppComponentType.Php => PhpTargetComboBox,
+        XamppComponentType.MariaDb => MariaDbTargetComboBox,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+    };
 
     private static string FormatCandidate(PackageCandidate candidate)
     {
@@ -375,18 +444,9 @@ public partial class MainWindow : Window
         }
 
         var details = new List<string>();
-        if (candidate.Compiler is not null)
-        {
-            details.Add(candidate.Compiler);
-        }
-        if (candidate.ThreadSafe is not null)
-        {
-            details.Add(candidate.ThreadSafe.Value ? "TS" : "NTS");
-        }
-        if (candidate.Sha256 is not null)
-        {
-            details.Add("SHA256");
-        }
+        if (candidate.Compiler is not null) details.Add(candidate.Compiler);
+        if (candidate.ThreadSafe is not null) details.Add(candidate.ThreadSafe.Value ? "TS" : "NTS");
+        if (candidate.Sha256 is not null) details.Add("SHA256");
 
         var suffix = details.Count == 0 ? string.Empty : $" / {string.Join(" / ", details)}";
         return $"실제 후보: {candidate.Version} [{status}]{suffix}";
@@ -410,6 +470,18 @@ public partial class MainWindow : Window
         ApachePlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
         PhpPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
         MariaDbPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
+    }
+
+    private void ClearPreflight()
+    {
+        foreach (var button in new[] { ApachePreflightButton, PhpPreflightButton, MariaDbPreflightButton })
+        {
+            button.IsEnabled = false;
+        }
+
+        ApachePreflightText.Text = "준비 점검: 대상 버전 선택 후 실행할 수 있습니다.";
+        PhpPreflightText.Text = "준비 점검: 대상 버전 선택 후 실행할 수 있습니다.";
+        MariaDbPreflightText.Text = "준비 점검: 대상 버전 선택 후 실행할 수 있습니다.";
     }
 
     private void SetBusy(bool isBusy, string? message = null)
