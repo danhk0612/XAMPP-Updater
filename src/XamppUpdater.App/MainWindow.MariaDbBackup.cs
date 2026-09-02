@@ -9,37 +9,6 @@ public partial class MainWindow
 {
     private readonly IMariaDbLogicalBackupService _mariaDbLogicalBackupService = new MariaDbLogicalBackupService();
     private readonly IWindowsServiceController _windowsServiceController = new WindowsServiceController();
-    private bool _adjustingMariaDbBackupButton;
-
-    private void InitializeMariaDbSafeBackupUi()
-    {
-        MariaDbBackupButton.Click -= BackupButton_Click;
-        MariaDbBackupButton.Click += MariaDbSafeBackupButton_Click;
-        MariaDbBackupButton.IsEnabledChanged += MariaDbBackupButton_IsEnabledChanged;
-    }
-
-    private void MariaDbBackupButton_IsEnabledChanged(object sender, DependencyPropertyChangedEventArgs e)
-    {
-        if (_adjustingMariaDbBackupButton || MariaDbBackupButton.IsEnabled)
-        {
-            return;
-        }
-
-        if (_preflightReports.TryGetValue(XamppComponentType.MariaDb, out var report) &&
-            MariaDbTargetComboBox.SelectedItem is UpdateTargetOption &&
-            CanRunMariaDbSafeBackup(report))
-        {
-            _adjustingMariaDbBackupButton = true;
-            try
-            {
-                MariaDbBackupButton.IsEnabled = true;
-            }
-            finally
-            {
-                _adjustingMariaDbBackupButton = false;
-            }
-        }
-    }
 
     private async void MariaDbSafeBackupButton_Click(object sender, RoutedEventArgs e)
     {
@@ -74,14 +43,14 @@ public partial class MainWindow
                 var logical = await _mariaDbLogicalBackupService.CreateAsync(report);
                 if (!logical.Success && logical.AuthenticationRequired)
                 {
-                    var dialog = new MariaDbCredentialsDialog(this);
-                    if (dialog.ShowDialog() != true)
+                    var credentials = await MariaDbCredentialsDialog.RequestAsync(this);
+                    if (credentials is null)
                     {
                         StatusText.Text = "MariaDB 백업 취소: 인증정보 입력이 취소되었습니다.";
                         return;
                     }
 
-                    logical = await _mariaDbLogicalBackupService.CreateAsync(report, dialog.Credentials);
+                    logical = await _mariaDbLogicalBackupService.CreateAsync(report, credentials);
                 }
 
                 if (!logical.Success || logical.FilePath is null || logical.Sha256 is null)
