@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using XamppUpdater.Core.Services;
 
@@ -9,6 +10,8 @@ public sealed class PhpMigrationReviewWindow : Window
 {
     private readonly string _automaticProposal;
     private readonly TextBox _editor;
+    private readonly TextBox _searchBox;
+    private readonly TextBlock _searchStatus;
 
     public string? FinalIniText { get; private set; }
 
@@ -25,6 +28,7 @@ public sealed class PhpMigrationReviewWindow : Window
         var root = new Grid { Margin = new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(180) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -61,6 +65,53 @@ public sealed class PhpMigrationReviewWindow : Window
         Grid.SetRow(editorLabel, 2);
         root.Children.Add(editorLabel);
 
+        var searchPanel = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+        var searchLabel = new TextBlock
+        {
+            Text = "검색",
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0)
+        };
+        DockPanel.SetDock(searchLabel, Dock.Left);
+        searchPanel.Children.Add(searchLabel);
+
+        var previousButton = new Button
+        {
+            Content = "이전",
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(6, 0, 0, 0)
+        };
+        DockPanel.SetDock(previousButton, Dock.Right);
+        searchPanel.Children.Add(previousButton);
+
+        var nextButton = new Button
+        {
+            Content = "다음",
+            Padding = new Thickness(10, 3, 10, 3),
+            Margin = new Thickness(6, 0, 0, 0)
+        };
+        DockPanel.SetDock(nextButton, Dock.Right);
+        searchPanel.Children.Add(nextButton);
+
+        _searchStatus = new TextBlock
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 4, 0),
+            MinWidth = 70,
+            TextAlignment = TextAlignment.Right
+        };
+        DockPanel.SetDock(_searchStatus, Dock.Right);
+        searchPanel.Children.Add(_searchStatus);
+
+        _searchBox = new TextBox
+        {
+            MinWidth = 240,
+            VerticalContentAlignment = VerticalAlignment.Center
+        };
+        searchPanel.Children.Add(_searchBox);
+        Grid.SetRow(searchPanel, 3);
+        root.Children.Add(searchPanel);
+
         _editor = new TextBox
         {
             Text = review.ProposedIni,
@@ -72,8 +123,18 @@ public sealed class PhpMigrationReviewWindow : Window
             FontSize = 13,
             TextWrapping = TextWrapping.NoWrap
         };
-        Grid.SetRow(_editor, 3);
+        Grid.SetRow(_editor, 4);
         root.Children.Add(_editor);
+
+        previousButton.Click += (_, _) => FindPrevious();
+        nextButton.Click += (_, _) => FindNext();
+        _searchBox.TextChanged += (_, _) =>
+        {
+            _searchStatus.Text = string.Empty;
+            if (!string.IsNullOrWhiteSpace(_searchBox.Text)) FindNext(fromCurrentSelection: false);
+        };
+        _searchBox.PreviewKeyDown += SearchBox_PreviewKeyDown;
+        PreviewKeyDown += Window_PreviewKeyDown;
 
         var buttons = new StackPanel
         {
@@ -88,7 +149,11 @@ public sealed class PhpMigrationReviewWindow : Window
             Padding = new Thickness(14, 6, 14, 6),
             Margin = new Thickness(0, 0, 8, 0)
         };
-        reset.Click += (_, _) => _editor.Text = _automaticProposal;
+        reset.Click += (_, _) =>
+        {
+            _editor.Text = _automaticProposal;
+            _searchStatus.Text = string.Empty;
+        };
 
         var cancel = new Button
         {
@@ -124,10 +189,106 @@ public sealed class PhpMigrationReviewWindow : Window
         buttons.Children.Add(reset);
         buttons.Children.Add(cancel);
         buttons.Children.Add(confirm);
-        Grid.SetRow(buttons, 4);
+        Grid.SetRow(buttons, 5);
         root.Children.Add(buttons);
 
         Content = root;
+    }
+
+    private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious();
+        else FindNext();
+        e.Handled = true;
+    }
+
+    private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) != 0)
+        {
+            _searchBox.Focus();
+            _searchBox.SelectAll();
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.F3) return;
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious();
+        else FindNext();
+        e.Handled = true;
+    }
+
+    private void FindNext(bool fromCurrentSelection = true)
+    {
+        var query = _searchBox.Text;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _searchStatus.Text = string.Empty;
+            return;
+        }
+
+        var text = _editor.Text;
+        var start = fromCurrentSelection ? _editor.SelectionStart + _editor.SelectionLength : 0;
+        if (start > text.Length) start = 0;
+        var index = text.IndexOf(query, start, StringComparison.OrdinalIgnoreCase);
+        if (index < 0 && start > 0)
+        {
+            index = text.IndexOf(query, 0, StringComparison.OrdinalIgnoreCase);
+        }
+        SelectSearchResult(index, query.Length);
+    }
+
+    private void FindPrevious()
+    {
+        var query = _searchBox.Text;
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            _searchStatus.Text = string.Empty;
+            return;
+        }
+
+        var text = _editor.Text;
+        var start = Math.Max(0, _editor.SelectionStart - 1);
+        var index = start < text.Length
+            ? text.LastIndexOf(query, start, StringComparison.OrdinalIgnoreCase)
+            : -1;
+        if (index < 0 && text.Length > 0)
+        {
+            index = text.LastIndexOf(query, text.Length - 1, StringComparison.OrdinalIgnoreCase);
+        }
+        SelectSearchResult(index, query.Length);
+    }
+
+    private void SelectSearchResult(int index, int length)
+    {
+        if (index < 0)
+        {
+            _searchStatus.Text = "결과 없음";
+            return;
+        }
+
+        _editor.Focus();
+        _editor.Select(index, length);
+        var line = _editor.GetLineIndexFromCharacterIndex(index);
+        if (line >= 0) _editor.ScrollToLine(line);
+
+        var total = CountOccurrences(_editor.Text, _searchBox.Text);
+        var current = CountOccurrences(_editor.Text[..index], _searchBox.Text) + 1;
+        _searchStatus.Text = $"{current}/{total}";
+    }
+
+    private static int CountOccurrences(string text, string query)
+    {
+        if (string.IsNullOrEmpty(query)) return 0;
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(query, index, StringComparison.OrdinalIgnoreCase)) >= 0)
+        {
+            count++;
+            index += Math.Max(1, query.Length);
+        }
+        return count;
     }
 
     private static string BuildReviewText(PhpMigrationReviewResult review)
