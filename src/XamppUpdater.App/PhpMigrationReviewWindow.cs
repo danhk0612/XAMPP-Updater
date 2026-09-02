@@ -126,12 +126,15 @@ public sealed class PhpMigrationReviewWindow : Window
         Grid.SetRow(_editor, 4);
         root.Children.Add(_editor);
 
-        previousButton.Click += (_, _) => FindPrevious();
-        nextButton.Click += (_, _) => FindNext();
+        previousButton.Click += (_, _) => FindPrevious(focusEditor: true);
+        nextButton.Click += (_, _) => FindNext(focusEditor: true);
         _searchBox.TextChanged += (_, _) =>
         {
             _searchStatus.Text = string.Empty;
-            if (!string.IsNullOrWhiteSpace(_searchBox.Text)) FindNext(fromCurrentSelection: false);
+            if (!string.IsNullOrWhiteSpace(_searchBox.Text))
+            {
+                FindNext(fromCurrentSelection: false, focusEditor: false);
+            }
         };
         _searchBox.PreviewKeyDown += SearchBox_PreviewKeyDown;
         PreviewKeyDown += Window_PreviewKeyDown;
@@ -198,8 +201,8 @@ public sealed class PhpMigrationReviewWindow : Window
     private void SearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         if (e.Key != Key.Enter) return;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious();
-        else FindNext();
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious(focusEditor: false);
+        else FindNext(focusEditor: false);
         e.Handled = true;
     }
 
@@ -214,12 +217,12 @@ public sealed class PhpMigrationReviewWindow : Window
         }
 
         if (e.Key != Key.F3) return;
-        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious();
-        else FindNext();
+        if ((Keyboard.Modifiers & ModifierKeys.Shift) != 0) FindPrevious(focusEditor: false);
+        else FindNext(focusEditor: false);
         e.Handled = true;
     }
 
-    private void FindNext(bool fromCurrentSelection = true)
+    private void FindNext(bool fromCurrentSelection = true, bool focusEditor = false)
     {
         var query = _searchBox.Text;
         if (string.IsNullOrWhiteSpace(query))
@@ -236,10 +239,10 @@ public sealed class PhpMigrationReviewWindow : Window
         {
             index = text.IndexOf(query, 0, StringComparison.OrdinalIgnoreCase);
         }
-        SelectSearchResult(index, query.Length);
+        SelectSearchResult(index, query.Length, focusEditor);
     }
 
-    private void FindPrevious()
+    private void FindPrevious(bool focusEditor = false)
     {
         var query = _searchBox.Text;
         if (string.IsNullOrWhiteSpace(query))
@@ -257,10 +260,10 @@ public sealed class PhpMigrationReviewWindow : Window
         {
             index = text.LastIndexOf(query, text.Length - 1, StringComparison.OrdinalIgnoreCase);
         }
-        SelectSearchResult(index, query.Length);
+        SelectSearchResult(index, query.Length, focusEditor);
     }
 
-    private void SelectSearchResult(int index, int length)
+    private void SelectSearchResult(int index, int length, bool focusEditor)
     {
         if (index < 0)
         {
@@ -268,10 +271,10 @@ public sealed class PhpMigrationReviewWindow : Window
             return;
         }
 
-        _editor.Focus();
         _editor.Select(index, length);
         var line = _editor.GetLineIndexFromCharacterIndex(index);
         if (line >= 0) _editor.ScrollToLine(line);
+        if (focusEditor) _editor.Focus();
 
         var total = CountOccurrences(_editor.Text, _searchBox.Text);
         var current = CountOccurrences(_editor.Text[..index], _searchBox.Text) + 1;
