@@ -68,18 +68,15 @@ public sealed class ApacheMigrationOverrideStore : IApacheMigrationOverrideStore
 
     internal static string ComputeConfHash(string confRoot)
     {
-        using var sha = SHA256.Create();
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var file in Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories)
                      .OrderBy(path => Path.GetRelativePath(confRoot, path), StringComparer.OrdinalIgnoreCase))
         {
             var relative = Path.GetRelativePath(confRoot, file).Replace('\\', '/');
-            var header = Encoding.UTF8.GetBytes(relative + "\n");
-            sha.TransformBlock(header, 0, header.Length, null, 0);
-            var bytes = File.ReadAllBytes(file);
-            sha.TransformBlock(bytes, 0, bytes.Length, null, 0);
+            hash.AppendData(Encoding.UTF8.GetBytes(relative + "\n"));
+            hash.AppendData(File.ReadAllBytes(file));
         }
-        sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
-        return Convert.ToHexString(sha.Hash!);
+        return Convert.ToHexString(hash.GetHashAndReset());
     }
 
     private string GetPath(string xamppRoot, string targetVersion)
