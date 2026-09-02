@@ -78,7 +78,7 @@ public static class CompatibilityEvaluator
             return $"환경: {architecture}, MariaDB {series}. XAMPP 공식 {online.XamppBundledVersion}와 계열이 다릅니다. 데이터/설정 전체 백업 후 공식 중간 업그레이드 경로를 따라 단계별로 진행하고 각 단계에서 검증하는 마이그레이션이 필요합니다.";
         }
 
-        return $"환경: {architecture}, MariaDB {series}. XAMPP 공식 {online.XamppBundledVersion}는 같은 {series} 계열입니다. 백업, 바이너리 교체, mariadb-upgrade, 상태 검증을 순차 자동화하는 보조 업데이트 후보입니다.";
+        return $"환경: {architecture}, MariaDB {series}. XAMPP 공식 {online.XamppBundledVersion}는 같은 {series} 계열의 패치 업데이트 후보입니다. 백업, 바이너리 교체, mariadb-upgrade, 상태 검증을 순차 자동화하는 보조 업데이트로 진행할 수 있습니다.";
     }
 
     private static bool SameMajor(string? left, string? right)
