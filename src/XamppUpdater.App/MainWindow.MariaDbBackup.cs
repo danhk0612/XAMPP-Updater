@@ -12,6 +12,7 @@ public partial class MainWindow
 
     private void InitializeMariaDbSafeBackupUi()
     {
+        MariaDbBackupButton.Click -= BackupButton_Click;
         MariaDbBackupButton.Click += MariaDbSafeBackupButton_Click;
     }
 
