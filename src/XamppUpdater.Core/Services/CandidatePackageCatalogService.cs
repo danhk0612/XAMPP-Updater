@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using XamppUpdater.Core.Models;
 
@@ -57,7 +56,7 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             return Unavailable(XamppComponentType.Apache, architecture, "현재 아키텍처에 맞는 Apache Lounge 후보 규칙이 없습니다.");
         }
 
-        var candidates = ApacheLoungeZipRegex().Matches(html)
+        var candidate = ApacheLoungeZipRegex().Matches(html)
             .Select(match => new
             {
                 Href = WebUtility.HtmlDecode(match.Groups["href"].Value),
@@ -71,28 +70,28 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             .OrderByDescending(item => item.Parsed)
             .FirstOrDefault();
 
-        if (candidates is null)
+        if (candidate is null)
         {
             return Unavailable(XamppComponentType.Apache, architecture, "Apache Lounge에서 현재 아키텍처의 Windows ZIP을 찾지 못했습니다.");
         }
 
-        var sameSeries = SameMajorMinor(installedVersion, candidates.VersionText);
-        var downloadUrl = new Uri(new Uri("https://www.apachelounge.com/download/"), candidates.Href).ToString();
+        var sameSeries = SameMajorMinor(installedVersion, candidate.VersionText);
+        var downloadUrl = new Uri(new Uri("https://www.apachelounge.com/download/"), candidate.Href).ToString();
 
         return new PackageCandidate(
             XamppComponentType.Apache,
-            candidates.VersionText,
-            candidates.FileName,
+            candidate.VersionText,
+            candidate.FileName,
             downloadUrl,
             architecture,
-            candidates.Compiler.ToUpperInvariant(),
+            candidate.Compiler.ToUpperInvariant(),
             null,
             null,
             "https://www.apachelounge.com/download/",
-            sameSeries ? CandidateCompatibilityStatus.Conditional : CandidateCompatibilityStatus.Blocked,
+            sameSeries ? CandidateCompatibilityStatus.Assisted : CandidateCompatibilityStatus.ManualReview,
             sameSeries
-                ? "같은 Apache 2.4 계열의 Windows 바이너리입니다. Apache Lounge는 구형 VS 모듈의 상위 VS 빌드 호환성을 안내하지만, XAMPP의 PHP 모듈/추가 모듈 ABI와 VC++ 런타임을 실제 ZIP 기준으로 확인해야 합니다."
-                : "현재 Apache와 계열이 달라 자동 적용하지 않습니다.");
+                ? "같은 Apache 2.4 계열의 Windows 바이너리입니다. 자동 백업 후 새 패키지와 기존 모듈/설정을 비교하고, PHP/추가 모듈 ABI 검사를 통과한 항목은 자동 교체하며 불일치 항목만 사용자 확인을 받는 보조 업데이트 대상으로 처리합니다."
+                : "현재 Apache와 계열이 다릅니다. 패키지 구조와 설정 차이를 비교해 마이그레이션 항목을 만든 뒤 사용자 확인을 거치는 수동 검토 업데이트 대상으로 처리합니다.");
     }
 
     internal static PackageCandidate ParsePhpArchiveCandidate(
@@ -120,7 +119,7 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
         var expectedCompiler = NormalizePhpCompiler(profile.Php.Compiler);
         var requireThreadSafe = profile.ApachePhpIntegration.IsModuleLoaded || profile.Php.ThreadSafe == true;
 
-        var candidates = PhpArchiveZipRegex().Matches(html)
+        var candidate = PhpArchiveZipRegex().Matches(html)
             .Select(match => new
             {
                 FileName = match.Groups["file"].Value,
@@ -138,24 +137,24 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             .OrderByDescending(item => item.Parsed)
             .FirstOrDefault();
 
-        if (candidates is null)
+        if (candidate is null)
         {
             return Unavailable(XamppComponentType.Php, profile.PhpArchitecture, $"PHP Windows archive에서 {series} 계열의 현재 환경과 일치하는 ZIP을 찾지 못했습니다.");
         }
 
-        var downloadUrl = $"https://windows.php.net/downloads/releases/archives/{candidates.FileName}";
+        var downloadUrl = $"https://windows.php.net/downloads/releases/archives/{candidate.FileName}";
         return new PackageCandidate(
             XamppComponentType.Php,
-            candidates.VersionText,
-            candidates.FileName,
+            candidate.VersionText,
+            candidate.FileName,
             downloadUrl,
             profile.PhpArchitecture,
-            candidates.Compiler.ToUpperInvariant(),
-            !candidates.IsNts,
+            candidate.Compiler.ToUpperInvariant(),
+            !candidate.IsNts,
             null,
             null,
-            CandidateCompatibilityStatus.Blocked,
-            "현재 PHP와 같은 major.minor, 아키텍처, Thread Safe, compiler 조건의 패치 후보입니다. 그러나 과거 archive 목록에서는 이 후보의 SHA256을 확보하지 못했으므로 자동 다운로드/적용 대상에서는 차단합니다.");
+            CandidateCompatibilityStatus.Assisted,
+            "현재 PHP와 같은 major.minor, 아키텍처, Thread Safe, compiler 조건의 패치 후보입니다. 공식 archive에서 SHA256을 직접 확보할 수 없어 완전 자동 적용은 하지 않지만, 사용자가 공식 패키지를 확인하거나 직접 지정하면 앱이 파일/ABI/확장 목록과 설정 차이를 검사한 뒤 백업·교체·설정 병합을 자동화하는 보조 업데이트 대상으로 처리합니다.");
     }
 
     internal static PackageCandidate ParseMariaDbSeriesCandidate(
@@ -200,8 +199,8 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             null,
             null,
             packagePage,
-            CandidateCompatibilityStatus.Conditional,
-            $"현재와 같은 MariaDB {series} 계열의 최신 공식 winx64 ZIP 후보입니다. 공식 패키지 페이지에 SHA256 manifest와 PGP 서명이 제공되므로 실제 다운로드 단계에서 검증할 수 있습니다. 백업과 mariadb-upgrade 검증은 여전히 필요합니다.");
+            CandidateCompatibilityStatus.Assisted,
+            $"현재와 같은 MariaDB {series} 계열의 최신 공식 winx64 ZIP 후보입니다. 다운로드 단계에서 공식 SHA256/PGP를 검증하고, 데이터 전체 백업·설정 비교·바이너리 교체·mariadb-upgrade 실행 및 결과 확인까지 순차 자동화하는 보조 업데이트 대상으로 처리합니다.");
     }
 
     private async Task<PackageCandidate> ResolveApacheAsync(
