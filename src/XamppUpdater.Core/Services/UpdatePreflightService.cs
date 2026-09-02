@@ -35,7 +35,7 @@ public sealed class UpdatePreflightService : IUpdatePreflightService
 
         var serviceState = component.ServiceName is null
             ? null
-            : ReadServiceState(component.ServiceName);
+            : WindowsServiceStateReader.Read(component.ServiceName);
 
         var files = Directory.Exists(componentRoot)
             ? EnumerateBackupFiles(componentRoot, type).ToArray()
@@ -107,8 +107,6 @@ public sealed class UpdatePreflightService : IUpdatePreflightService
             return Array.Empty<string>();
         }
 
-        // Phase 3A에서는 실제 백업 대상 규모와 manifest만 산출한다.
-        // 실행 시점의 제외/포함 정책은 이후 backup executor에서 동일 규칙을 사용한다.
         return Directory.EnumerateFiles(componentRoot, "*", SearchOption.AllDirectories);
     }
 
@@ -182,47 +180,8 @@ public sealed class UpdatePreflightService : IUpdatePreflightService
         }
     }
 
-    private static string? ReadServiceState(string serviceName)
-    {
-        try
-        {
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "sc.exe",
-                    Arguments = $"query \"{serviceName}\"",
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
-
-            process.Start();
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit(3000);
-
-            var stateLine = output
-                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault(line => line.Contains("STATE", StringComparison.OrdinalIgnoreCase));
-
-            if (stateLine is null)
-            {
-                return "확인 실패";
-            }
-
-            var parts = stateLine.Split(':', 2);
-            return parts.Length == 2 ? parts[1].Trim() : stateLine.Trim();
-        }
-        catch
-        {
-            return "확인 실패";
-        }
-    }
-
     private static bool IsRunningServiceState(string? state)
     {
-        return state?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
+        return string.Equals(state, "RUNNING", StringComparison.OrdinalIgnoreCase);
     }
 }
