@@ -14,6 +14,8 @@ public partial class MainWindow : Window
     private readonly ICandidatePackageCatalogService _candidateCatalog = new CandidatePackageCatalogService();
     private readonly ISelectableVersionCatalogService _selectableVersionCatalog = new SelectableVersionCatalogService();
     private readonly IUpdatePreflightService _preflightService = new UpdatePreflightService();
+    private readonly IUpdateBackupService _backupService = new UpdateBackupService();
+    private readonly Dictionary<XamppComponentType, UpdatePreflightReport> _preflightReports = new();
 
     private XamppInstallation? _lastInstallation;
     private InstallationCompatibilityProfile? _lastProfile;
@@ -68,6 +70,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        _preflightReports.Remove(target.Type);
+        SetBackupEnabled(target.Type, false);
         RenderSelectedPlan(target);
         SetPreflightEnabled(target.Type, true);
         SetPreflightText(target.Type, "준비 점검: 대상 버전에 대한 사전 점검을 실행할 수 있습니다.");
@@ -92,13 +96,67 @@ public partial class MainWindow : Window
         try
         {
             var report = await Task.Run(() => _preflightService.Inspect(_lastInstallation, type, target.Version));
+            _preflightReports[type] = report;
             SetPreflightText(type, FormatPreflight(report));
+
+            var mariaDbRunning = type == XamppComponentType.MariaDb &&
+                                 (report.ProcessRunning || report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true);
+            SetBackupEnabled(type, !mariaDbRunning);
+
+            if (mariaDbRunning)
+            {
+                SetPreflightText(type, FormatPreflight(report) + "\n백업 생성: MariaDB 물리 백업은 서비스 중지 후 실행합니다.");
+            }
+
             StatusText.Text = $"{type} 준비 점검 완료: {report.CurrentVersion} → {report.TargetVersion}";
         }
         catch (Exception ex)
         {
+            _preflightReports.Remove(type);
+            SetBackupEnabled(type, false);
             SetPreflightText(type, $"준비 점검 실패: {ex.Message}");
             StatusText.Text = $"{type} 준비 점검 실패: {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async void BackupButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastInstallation is null || sender is not Button button ||
+            !Enum.TryParse<XamppComponentType>(button.Tag?.ToString(), true, out var type))
+        {
+            return;
+        }
+
+        var comboBox = GetTargetComboBox(type);
+        if (comboBox.SelectedItem is not UpdateTargetOption target)
+        {
+            return;
+        }
+
+        SetBusy(true, $"{type} 롤백 백업을 생성하는 중...");
+        SetBackupEnabled(type, false);
+
+        try
+        {
+            var report = await Task.Run(() => _preflightService.Inspect(_lastInstallation, type, target.Version));
+            _preflightReports[type] = report;
+            var result = await Task.Run(() => _backupService.CreateBackup(report));
+            SetPreflightText(type,
+                FormatPreflight(report) +
+                $"\n백업 완료: {result.CopiedFiles:N0}개 / {FormatBytes(result.CopiedBytes)}" +
+                $"\nmanifest: {result.ManifestPath}");
+            SetBackupEnabled(type, true);
+            StatusText.Text = $"{type} 롤백 백업 생성 완료";
+        }
+        catch (Exception ex)
+        {
+            SetPreflightText(type, $"백업 생성 실패: {ex.Message}");
+            SetBackupEnabled(type, _preflightReports.ContainsKey(type));
+            StatusText.Text = $"{type} 백업 생성 실패: {ex.Message}";
         }
         finally
         {
@@ -157,6 +215,7 @@ public partial class MainWindow : Window
             _lastCandidates = null;
             _selectableVersions = null;
             _targetCatalog = null;
+            _preflightReports.Clear();
             InstallPathComboBox.Text = result.installation.RootPath;
             RenderInstallation(result.installation);
             RenderCompatibilityProfile(result.profile);
@@ -265,7 +324,6 @@ public partial class MainWindow : Window
             null => "Thread Safety 미상"
         };
         PhpEnvironmentText.Text = $"환경: {CompatibilityEvaluator.FormatArchitecture(profile.PhpArchitecture)} / {threadSafety} / {profile.Php.Compiler ?? "Compiler 미상"}";
-
         MariaDbEnvironmentText.Text = $"환경: {CompatibilityEvaluator.FormatArchitecture(profile.MariaDbArchitecture)} / {profile.MariaDbSeries ?? "계열 미상"} 계열";
     }
 
@@ -308,15 +366,9 @@ public partial class MainWindow : Window
             var text = FormatCandidate(candidate);
             switch (candidate.Type)
             {
-                case XamppComponentType.Apache:
-                    ApacheCandidateText.Text = text;
-                    break;
-                case XamppComponentType.Php:
-                    PhpCandidateText.Text = text;
-                    break;
-                case XamppComponentType.MariaDb:
-                    MariaDbCandidateText.Text = text;
-                    break;
+                case XamppComponentType.Apache: ApacheCandidateText.Text = text; break;
+                case XamppComponentType.Php: PhpCandidateText.Text = text; break;
+                case XamppComponentType.MariaDb: MariaDbCandidateText.Text = text; break;
             }
         }
     }
@@ -351,16 +403,9 @@ public partial class MainWindow : Window
 
         var plan = UpdateTargetPlanner.BuildPlan(target.Type, installedVersion, target, _lastProfile);
         var text = FormatPlan(plan);
-
-        if (target.PackageUrl is not null)
-        {
-            text += $"\n패키지: {target.PackageFileName ?? "공식 패키지 위치 확인됨"}";
-        }
-        else
-        {
-            text += "\n패키지: 업데이트 준비 단계에서 선택 버전에 맞는 Windows 패키지를 확인합니다.";
-        }
-
+        text += target.PackageUrl is not null
+            ? $"\n패키지: {target.PackageFileName ?? "공식 패키지 위치 확인됨"}"
+            : "\n패키지: 업데이트 준비 단계에서 선택 버전에 맞는 Windows 패키지를 확인합니다.";
         SetPlanText(target.Type, text);
     }
 
@@ -379,15 +424,26 @@ public partial class MainWindow : Window
         var runtime = report.ServiceName is not null
             ? $"서비스 {report.ServiceName}: {report.ServiceState ?? "상태 미상"}"
             : report.ProcessRunning ? "프로세스: 실행 중" : "프로세스: 중지";
-        var warning = report.Warnings.Count == 0
-            ? "주의사항 없음"
-            : string.Join(" / ", report.Warnings);
+        var warning = report.Warnings.Count == 0 ? "주의사항 없음" : string.Join(" / ", report.Warnings);
 
         return $"준비 점검: {runtime}\n" +
                $"백업 예상: {report.BackupFileCount:N0}개 / {report.BackupSizeText}\n" +
                $"설정 manifest: {report.ConfigFiles.Count:N0}개\n" +
                $"백업 위치: {report.BackupDestination}\n" +
                $"주의: {warning}";
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        var value = (double)bytes;
+        var units = new[] { "B", "KB", "MB", "GB", "TB" };
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+        return unit == 0 ? $"{bytes:N0} B" : $"{value:N2} {units[unit]}";
     }
 
     private void SetPlanText(XamppComponentType type, string text)
@@ -417,6 +473,16 @@ public partial class MainWindow : Window
             case XamppComponentType.Apache: ApachePreflightButton.IsEnabled = enabled; break;
             case XamppComponentType.Php: PhpPreflightButton.IsEnabled = enabled; break;
             case XamppComponentType.MariaDb: MariaDbPreflightButton.IsEnabled = enabled; break;
+        }
+    }
+
+    private void SetBackupEnabled(XamppComponentType type, bool enabled)
+    {
+        switch (type)
+        {
+            case XamppComponentType.Apache: ApacheBackupButton.IsEnabled = enabled; break;
+            case XamppComponentType.Php: PhpBackupButton.IsEnabled = enabled; break;
+            case XamppComponentType.MariaDb: MariaDbBackupButton.IsEnabled = enabled; break;
         }
     }
 
@@ -474,7 +540,11 @@ public partial class MainWindow : Window
 
     private void ClearPreflight()
     {
-        foreach (var button in new[] { ApachePreflightButton, PhpPreflightButton, MariaDbPreflightButton })
+        foreach (var button in new[]
+                 {
+                     ApachePreflightButton, PhpPreflightButton, MariaDbPreflightButton,
+                     ApacheBackupButton, PhpBackupButton, MariaDbBackupButton
+                 })
         {
             button.IsEnabled = false;
         }

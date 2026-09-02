@@ -27,7 +27,7 @@ public sealed class UpdateBackupService : IUpdateBackupService
             (preflight.ProcessRunning || preflight.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true))
         {
             throw new InvalidOperationException(
-                "MariaDB가 실행 중인 상태에서는 data 디렉터리 물리 백업을 만들지 않습니다. 실제 업데이트 단계에서 서비스 중지와 논리 백업 후 진행해야 합니다.");
+                "MariaDB가 실행 중인 상태에서는 data 디렉터리 물리 백업을 만들지 않습니다. 서비스 중지와 논리 백업 후 진행해야 합니다.");
         }
 
         var backupRoot = preflight.BackupDestination;
@@ -37,7 +37,7 @@ public sealed class UpdateBackupService : IUpdateBackupService
         var manifestFiles = new List<BackupManifestFile>();
         long copiedBytes = 0;
 
-        foreach (var source in UpdatePreflightService.EnumerateBackupFiles(preflight.ComponentRoot, preflight.Type))
+        foreach (var source in EnumerateStableBackupFiles(preflight.ComponentRoot, preflight.Type))
         {
             var relative = Path.GetRelativePath(preflight.ComponentRoot, source);
             var destination = Path.Combine(filesRoot, relative);
@@ -76,6 +76,18 @@ public sealed class UpdateBackupService : IUpdateBackupService
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions));
 
         return new BackupResult(manifest, manifestPath, copiedBytes, manifestFiles.Count);
+    }
+
+    internal static IEnumerable<string> EnumerateStableBackupFiles(string componentRoot, XamppComponentType type)
+    {
+        var files = UpdatePreflightService.EnumerateBackupFiles(componentRoot, type);
+        if (type != XamppComponentType.Apache)
+        {
+            return files;
+        }
+
+        var logsRoot = Path.Combine(componentRoot, "logs") + Path.DirectorySeparatorChar;
+        return files.Where(file => !file.StartsWith(logsRoot, StringComparison.OrdinalIgnoreCase));
     }
 
     internal static string ComputeSha256(string filePath)
