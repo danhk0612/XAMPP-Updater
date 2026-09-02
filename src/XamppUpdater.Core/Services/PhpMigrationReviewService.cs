@@ -44,7 +44,7 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         IPhpIniMigrationService? iniMigrationService = null,
         IPhpExternalExtensionInstaller? externalExtensionInstaller = null)
     {
-        _iniMigrationService = iniMigrationService ?? new PhpIniMigrationService();
+        _iniMigrationService = iniMigrationService ?? new PhpIniMigrationService(new IgnorePhpMigrationOverrideStore());
         _externalExtensionInstaller = externalExtensionInstaller ?? new PhpExternalExtensionInstaller();
     }
 
@@ -100,10 +100,8 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
                 throw new InvalidOperationException("PHP 설정 마이그레이션 제안안을 만들지 못했습니다.");
             }
 
-            var items = new List<PhpMigrationReviewItem>();
-            items.Add(new PhpMigrationReviewItem(
-                PhpMigrationReviewKind.Preserved,
-                "기존 php.ini를 기준으로 변경이 필요하지 않은 설정은 그대로 유지합니다."));
+            var proposedIni = File.ReadAllText(migration.IniPath);
+            var items = BuildPreservedItems(File.ReadAllText(currentIni), proposedIni);
 
             foreach (var dll in extensionResult.InstalledDlls)
             {
@@ -129,7 +127,7 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
             return new PhpMigrationReviewResult(
                 currentVersion,
                 target.Version,
-                File.ReadAllText(migration.IniPath),
+                proposedIni,
                 items,
                 extensionResult.InstalledDlls);
         }
@@ -137,6 +135,22 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         {
             TryDeleteDirectory(reviewRoot);
         }
+    }
+
+    private static List<PhpMigrationReviewItem> BuildPreservedItems(string currentIni, string proposedIni)
+    {
+        var current = currentIni.Replace("\r\n", "\n").Split('\n');
+        var proposed = proposedIni.Replace("\r\n", "\n").Split('\n');
+        var result = new List<PhpMigrationReviewItem>();
+        var count = Math.Min(current.Length, proposed.Length);
+        for (var index = 0; index < count; index++)
+        {
+            var line = current[index].Trim();
+            if (line.Length == 0 || line.StartsWith(';') || line.StartsWith('#') || !line.Contains('=')) continue;
+            if (!string.Equals(current[index], proposed[index], StringComparison.Ordinal)) continue;
+            result.Add(new PhpMigrationReviewItem(PhpMigrationReviewKind.Preserved, line));
+        }
+        return result;
     }
 
     private static bool IsExtensionWarningReviewRequired(string warning) =>
@@ -163,5 +177,11 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
     {
         if (!Directory.Exists(path)) return;
         try { Directory.Delete(path, recursive: true); } catch { }
+    }
+
+    private sealed class IgnorePhpMigrationOverrideStore : IPhpMigrationOverrideStore
+    {
+        public string Save(string xamppRoot, string targetVersion, string sourceIniPath, string iniText) => string.Empty;
+        public PhpMigrationOverride? TryLoad(string xamppRoot, string targetVersion, string sourceIniPath) => null;
     }
 }
