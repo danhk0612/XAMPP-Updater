@@ -28,6 +28,50 @@ AssertEqual("XAMPP Apache parser", "2.4.58", bundle.Apache);
 AssertEqual("XAMPP PHP parser", "8.2.12", bundle.Php);
 AssertEqual("XAMPP MariaDB parser", "10.4.32", bundle.MariaDb);
 
+var phpProfile = InstallationCompatibilityDetector.ParsePhpInfo(
+    "Thread Safety => enabled\n" +
+    "Compiler => MSVC15 (Visual C++ 2017)\n" +
+    "PHP Extension Build => API20180731,TS,VC15\n" +
+    "PHP API => 20180731\n");
+AssertEqual("PHP thread safety", "True", phpProfile.ThreadSafe?.ToString());
+AssertEqual("PHP compiler", "MSVC15 (Visual C++ 2017)", phpProfile.Compiler);
+AssertEqual("PHP extension build", "API20180731,TS,VC15", phpProfile.ExtensionBuild);
+AssertEqual("PHP API", "20180731", phpProfile.ApiVersion);
+
+var integration = InstallationCompatibilityDetector.ParseApachePhpIntegration(
+    @"C:\xampp\apache\conf\extra\httpd-xampp.conf",
+    "LoadModule php7_module \"C:/xampp/php/php7apache2_4.dll\"\nPHPIniDir \"C:/xampp/php\"");
+AssertEqual("Apache PHP module detected", "True", integration.IsModuleLoaded.ToString());
+AssertEqual("Apache PHP module name", "php7_module", integration.ModuleName);
+AssertEqual("Apache PHP module path", "C:/xampp/php/php7apache2_4.dll", integration.ModulePath);
+
+var compatibilityProfile = new InstallationCompatibilityProfile(
+    @"C:\xampp",
+    BinaryArchitecture.X64,
+    BinaryArchitecture.X64,
+    BinaryArchitecture.X64,
+    phpProfile,
+    integration,
+    "10.4");
+
+var phpOnline = new OnlineComponentVersion(
+    XamppComponentType.Php,
+    "8.5.10",
+    "8.3.12",
+    "https://www.php.net/downloads.php?os=windows",
+    "");
+var phpCompatibility = CompatibilityEvaluator.Evaluate(XamppComponentType.Php, "7.3.11", phpOnline, compatibilityProfile);
+AssertContains("PHP major upgrade compatibility", phpCompatibility, "메이저 변경");
+
+var mariaDbOnline = new OnlineComponentVersion(
+    XamppComponentType.MariaDb,
+    "12.3.3",
+    "10.4.32",
+    "https://mariadb.com/downloads/",
+    "");
+var mariaDbCompatibility = CompatibilityEvaluator.Evaluate(XamppComponentType.MariaDb, "10.4.8", mariaDbOnline, compatibilityProfile);
+AssertContains("MariaDB patch compatibility", mariaDbCompatibility, "패치 업데이트 후보");
+
 CheckServiceImagePath(
     "\"C:\\xampp\\mysql\\bin\\mysqld.exe\" --defaults-file=\"C:\\xampp\\mysql\\bin\\my.ini\" mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
@@ -107,6 +151,14 @@ void AssertEqual(string name, string expected, string? actual)
     if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
     {
         failures.Add($"{name}: expected '{expected}', actual '{actual ?? "<null>"}'.");
+    }
+}
+
+void AssertContains(string name, string actual, string expectedPart)
+{
+    if (!actual.Contains(expectedPart, StringComparison.Ordinal))
+    {
+        failures.Add($"{name}: expected text containing '{expectedPart}', actual '{actual}'.");
     }
 }
 
