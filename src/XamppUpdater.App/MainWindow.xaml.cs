@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using Microsoft.Win32;
 using XamppUpdater.Core.Models;
 using XamppUpdater.Core.Services;
@@ -16,6 +17,7 @@ public partial class MainWindow : Window
     private InstallationCompatibilityProfile? _lastProfile;
     private OnlineVersionCatalog? _lastCatalog;
     private CandidatePackageCatalog? _lastCandidates;
+    private UpdateTargetCatalog? _targetCatalog;
 
     public MainWindow()
     {
@@ -60,6 +62,16 @@ public partial class MainWindow : Window
     private async void OnlineCheckButton_Click(object sender, RoutedEventArgs e)
     {
         await CheckOnlineVersionsAsync();
+    }
+
+    private void TargetVersion_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_lastInstallation is null || _lastProfile is null || sender is not ComboBox comboBox || comboBox.SelectedItem is not UpdateTargetOption target)
+        {
+            return;
+        }
+
+        RenderSelectedPlan(target);
     }
 
     private async Task AutoDetectAsync()
@@ -111,10 +123,12 @@ public partial class MainWindow : Window
             _lastInstallation = result.installation;
             _lastProfile = result.profile;
             _lastCandidates = null;
+            _targetCatalog = null;
             InstallPathComboBox.Text = result.installation.RootPath;
             RenderInstallation(result.installation);
             RenderCompatibilityProfile(result.profile);
             ClearCandidates();
+            ClearTargetSelectors();
 
             if (_lastCatalog is not null)
             {
@@ -141,7 +155,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SetBusy(true, "최신 버전과 현재 환경에 맞는 실제 패키지 후보를 확인하는 중...");
+        SetBusy(true, "최신 버전, 패키지 후보와 선택 가능한 업데이트 경로를 확인하는 중...");
 
         try
         {
@@ -151,9 +165,11 @@ public partial class MainWindow : Window
 
             _lastCatalog = await catalogTask;
             _lastCandidates = await candidateTask;
+            _targetCatalog = UpdateTargetPlanner.BuildCatalog(_lastInstallation, _lastCatalog, _lastCandidates);
 
             RenderOnlineCatalog(_lastCatalog);
             RenderCandidates(_lastCandidates);
+            RenderTargetSelectors(_targetCatalog);
             StatusText.Text = $"온라인 확인 완료: {_lastCatalog.CheckedAt:yyyy-MM-dd HH:mm:ss}";
         }
         catch (Exception ex)
@@ -265,6 +281,64 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RenderTargetSelectors(UpdateTargetCatalog catalog)
+    {
+        SetTargets(ApacheTargetComboBox, catalog.Apache);
+        SetTargets(PhpTargetComboBox, catalog.Php);
+        SetTargets(MariaDbTargetComboBox, catalog.MariaDb);
+    }
+
+    private static void SetTargets(ComboBox comboBox, IReadOnlyList<UpdateTargetOption> targets)
+    {
+        comboBox.ItemsSource = targets;
+        comboBox.IsEnabled = targets.Count > 0;
+        comboBox.SelectedIndex = targets.Count > 0 ? 0 : -1;
+    }
+
+    private void RenderSelectedPlan(UpdateTargetOption target)
+    {
+        if (_lastInstallation is null || _lastProfile is null)
+        {
+            return;
+        }
+
+        var installedVersion = _lastInstallation.Components.First(item => item.Type == target.Type).Version;
+        if (installedVersion is null)
+        {
+            SetPlanText(target.Type, "업데이트 경로: 현재 버전을 확인할 수 없습니다.");
+            return;
+        }
+
+        var plan = UpdateTargetPlanner.BuildPlan(target.Type, installedVersion, target, _lastProfile);
+        SetPlanText(target.Type, FormatPlan(plan));
+    }
+
+    private static string FormatPlan(UpdatePlan plan)
+    {
+        var automatic = plan.Steps.Count(step => step.Kind == UpdatePlanStepKind.Automatic);
+        var assisted = plan.Steps.Count(step => step.Kind == UpdatePlanStepKind.Assisted);
+        var confirmations = plan.Steps.Count(step => step.Kind == UpdatePlanStepKind.UserConfirmation);
+        var package = $"자동 {automatic} / 보조 {assisted} / 확인 {confirmations}";
+        var mainSteps = string.Join(" → ", plan.Steps.Select(step => step.Title));
+        return $"업데이트 경로: {plan.Summary}\n{package}\n{mainSteps}";
+    }
+
+    private void SetPlanText(XamppComponentType type, string text)
+    {
+        switch (type)
+        {
+            case XamppComponentType.Apache:
+                ApachePlanText.Text = text;
+                break;
+            case XamppComponentType.Php:
+                PhpPlanText.Text = text;
+                break;
+            case XamppComponentType.MariaDb:
+                MariaDbPlanText.Text = text;
+                break;
+        }
+    }
+
     private static string FormatCandidate(PackageCandidate candidate)
     {
         var status = candidate.Status switch
@@ -303,6 +377,19 @@ public partial class MainWindow : Window
         ApacheCandidateText.Text = "실제 후보: -";
         PhpCandidateText.Text = "실제 후보: -";
         MariaDbCandidateText.Text = "실제 후보: -";
+    }
+
+    private void ClearTargetSelectors()
+    {
+        foreach (var comboBox in new[] { ApacheTargetComboBox, PhpTargetComboBox, MariaDbTargetComboBox })
+        {
+            comboBox.ItemsSource = null;
+            comboBox.IsEnabled = false;
+        }
+
+        ApachePlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
+        PhpPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
+        MariaDbPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
     }
 
     private void SetBusy(bool isBusy, string? message = null)
