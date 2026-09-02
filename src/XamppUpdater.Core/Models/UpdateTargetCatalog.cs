@@ -11,9 +11,12 @@ public sealed record UpdateTargetOption(
     string Label,
     UpdateTargetSource Source,
     bool IsLatest,
-    bool PackageResolved)
+    bool PackageResolved,
+    string? PackageUrl = null,
+    string? PackageFileName = null,
+    bool IsEol = false)
 {
-    public string DisplayText => $"{Version} — {Label}{(PackageResolved ? "" : " (패키지 확인 필요)")}";
+    public string DisplayText => $"{Version} — {Label}{(IsEol ? " [EOL]" : string.Empty)}{(PackageResolved ? string.Empty : " (패키지 확인 필요)")}";
 }
 
 public enum UpdateTargetSource
@@ -21,7 +24,8 @@ public enum UpdateTargetSource
     Installed,
     SameSeriesCandidate,
     XamppBundle,
-    UpstreamLatest
+    UpstreamLatest,
+    OfficialArchive
 }
 
 public sealed record UpdatePlan(
