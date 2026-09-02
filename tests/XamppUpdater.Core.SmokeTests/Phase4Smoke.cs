@@ -19,8 +19,10 @@ internal static class Phase4Smoke
             File.WriteAllText(oldIni,
                 "memory_limit=512M\n" +
                 "extension=php_curl.dll\n" +
+                "extension=bz2\n" +
                 "zend_extension=php_xdebug.dll\n");
             File.WriteAllBytes(Path.Combine(extRoot, "php_curl.dll"), Array.Empty<byte>());
+            File.WriteAllBytes(Path.Combine(extRoot, "php_bz2.dll"), Array.Empty<byte>());
 
             var result = new PhpIniMigrationService().Migrate(oldIni, newRoot);
             if (!result.Migrated || result.IniPath is null)
@@ -30,6 +32,7 @@ internal static class Phase4Smoke
 
             var migrated = File.ReadAllText(result.IniPath);
             if (!migrated.Contains("extension=php_curl.dll", StringComparison.Ordinal) ||
+                !migrated.Contains("extension=php_bz2.dll", StringComparison.Ordinal) ||
                 !migrated.Contains("disabled missing/incompatible extension: zend_extension=php_xdebug.dll", StringComparison.Ordinal) ||
                 !File.Exists(Path.Combine(newRoot, "php.ini.xampp-updater-original")))
             {
