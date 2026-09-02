@@ -11,6 +11,7 @@ public partial class MainWindow
 {
     private readonly IBackupLocatorService _backupLocator = new BackupLocatorService();
     private readonly IPhpUpdateExecutor _phpUpdateExecutor = new PhpUpdateExecutor();
+    private readonly IVisualCppRuntimeInstaller _vcRuntimeInstaller = new VisualCppRuntimeInstaller();
     private Button? _phpExecuteButton;
     private bool _phpUpdateRunning;
 
@@ -108,6 +109,7 @@ public partial class MainWindow
             this,
             $"PHP를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
             "Apache가 실행 중이면 자동 중지하며, php.ini와 Apache PHP 모듈 설정을 마이그레이션합니다. " +
+            "필요한 Visual C++ 런타임이 부족하면 Microsoft 공식 재배포 패키지 설치를 요청할 수 있습니다. " +
             "검증 실패 시 자동 롤백합니다. 계속하시겠습니까?",
             "PHP 업데이트 실행",
             MessageBoxButton.YesNo,
@@ -133,6 +135,37 @@ public partial class MainWindow
 
         try
         {
+            var minimumRuntime = GetRequiredVcRuntime(target.Version);
+            if (minimumRuntime is not null)
+            {
+                StatusText.Text = $"Visual C++ 런타임 확인 중... 최소 {minimumRuntime.Major}.{minimumRuntime.Minor}";
+                var runtimeResult = await _vcRuntimeInstaller.EnsureMinimumAsync(package.Architecture, minimumRuntime);
+                if (!runtimeResult.Success)
+                {
+                    throw new InvalidOperationException(
+                        $"Visual C++ Redistributable 설치/검증에 실패했습니다. 종료 코드: {runtimeResult.ExitCode}, " +
+                        $"현재 런타임: {runtimeResult.AfterVersion?.ToString() ?? "확인 불가"}");
+                }
+
+                if (runtimeResult.Installed)
+                {
+                    AppendDetail(
+                        XamppComponentType.Php,
+                        $"Visual C++ 런타임 자동 보강: {runtimeResult.BeforeVersion?.ToString() ?? "없음/확인 불가"} → " +
+                        $"{runtimeResult.AfterVersion?.ToString() ?? "확인 불가"}");
+                    if (!string.IsNullOrWhiteSpace(runtimeResult.Sha256))
+                    {
+                        AppendDetail(XamppComponentType.Php, $"VC++ 재배포 패키지 SHA256: {runtimeResult.Sha256}");
+                    }
+                }
+
+                if (runtimeResult.RebootRequired)
+                {
+                    throw new InvalidOperationException(
+                        "Visual C++ Redistributable 설치는 완료됐지만 Windows 재부팅이 필요합니다. 재부팅 후 PHP 업데이트를 다시 실행하세요.");
+                }
+            }
+
             // ZIP 해제, 실행 파일 검증, 디렉터리 교체처럼 동기 파일 I/O가 포함되므로
             // 전체 실행기를 worker thread에서 수행해 WPF UI가 멈추지 않게 한다.
             var result = await Task.Run(async () =>
@@ -186,5 +219,19 @@ public partial class MainWindow
             SetBusy(false);
             RefreshPhpExecuteEnabled();
         }
+    }
+
+    private static Version? GetRequiredVcRuntime(string phpVersion)
+    {
+        var parts = phpVersion.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !int.TryParse(parts[0], out var major) || !int.TryParse(parts[1], out var minor))
+        {
+            return null;
+        }
+
+        if (major > 8 || major == 8 && minor >= 5) return new Version(14, 44, 0, 0);
+        if (major == 8 && minor >= 4) return new Version(14, 40, 0, 0);
+        if (major == 8 && minor >= 0) return new Version(14, 29, 0, 0);
+        return null;
     }
 }
