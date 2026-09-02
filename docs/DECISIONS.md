@@ -36,3 +36,34 @@ Phase 1에서는 설치 감지와 버전 확인만 한다. 서비스 중지/시�
 ## D-007 업데이트 전에 호환성 계층을 먼저 만든다
 
 Apache/PHP/MariaDB의 upstream Windows 패키지는 XAMPP 번들과 구조 및 빌드 조건이 다를 수 있다. 따라서 최신 버전을 찾았다는 이유만으로 자동 교체하지 않고, Phase 2에서 공급원/아키텍처/런타임/패키지 구조 호환성을 정의한 뒤 업데이트 엔진을 구현한다.
+
+## D-008 최신 버전과 XAMPP 적용 가능 버전을 분리
+
+`upstream 최신 버전`과 `XAMPP 공식 번들 기준 버전`을 서로 다른 값으로 관리한다. upstream에 새 버전이 있다는 이유만으로 업데이트 가능 상태로 표시하지 않는다.
+
+현재 메타데이터 공급원은 다음을 우선한다.
+
+- Apache 최신 릴리스: Apache HTTP Server 공식 다운로드 페이지
+- PHP 최신 Windows 릴리스: PHP 공식 Windows 다운로드 페이지
+- MariaDB 최신 Community Server: MariaDB 공식 다운로드 페이지
+- XAMPP 공식 번들 기준: Apache Friends 공식 Windows 다운로드 페이지
+
+공급원 HTML 구조가 변경되어 파싱에 실패하면 해당 구성요소를 `확인 실패`로 처리하며 임의의 버전을 추정하지 않는다.
+
+## D-009 Apache Windows 바이너리는 별도 공급원 검증 필요
+
+Apache Software Foundation은 Windows용 httpd 바이너리를 직접 릴리스하지 않는다. 현재 공식 문서에서 Apache Lounge 등 제3자 Windows 바이너리 공급원을 안내한다.
+
+따라서 Apache 최신 버전 메타데이터는 ASF에서 확인하되, 실제 업데이트 ZIP의 공급원/컴파일러/모듈 ABI/VC++ 런타임 호환성은 별도의 패키지 호환성 판정을 통과해야 한다.
+
+## D-010 PHP의 XAMPP 기본 후보는 x64 Thread Safe
+
+Apache 모듈 방식으로 PHP를 사용하는 일반적인 XAMPP 구성에서는 Windows x64 Thread Safe 빌드를 기본 후보로 본다. PHP 공식 문서도 Apache HTTP Server에서 사용하는 경우 Thread Safe 빌드를 안내한다.
+
+단, 기존 `httpd.conf`/`httpd-xampp.conf`의 PHP 연동 방식과 확장 DLL ABI를 실제로 확인한 뒤 최종 판정한다.
+
+## D-011 MariaDB 메이저 버전 직접 점프 금지
+
+MariaDB는 데이터 파일과 시스템 테이블의 업그레이드 절차가 있으므로 최신 Community Server 메이저 버전을 단순 파일 교체 대상으로 취급하지 않는다.
+
+현재 버전 → 목표 버전의 지원되는 업그레이드 경로, 백업, `mariadb-upgrade` 계열 절차를 정의하기 전에는 자동 업데이트 대상으로 표시하지 않는다.
