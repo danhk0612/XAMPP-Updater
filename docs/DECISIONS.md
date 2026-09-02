@@ -67,3 +67,23 @@ Apache 모듈 방식으로 PHP를 사용하는 일반적인 XAMPP 구성에서�
 MariaDB는 데이터 파일과 시스템 테이블의 업그레이드 절차가 있으므로 최신 Community Server 메이저 버전을 단순 파일 교체 대상으로 취급하지 않는다.
 
 현재 버전 → 목표 버전의 지원되는 업그레이드 경로, 백업, `mariadb-upgrade` 계열 절차를 정의하기 전에는 자동 업데이트 대상으로 표시하지 않는다.
+
+## D-012 현재 설치 환경을 먼저 프로파일링
+
+후보 패키지와 비교하기 전에 현재 XAMPP 설치의 실제 실행 파일과 설정을 읽어 호환성 프로파일을 만든다.
+
+- Apache/PHP/MariaDB 실행 파일의 PE 아키텍처 확인
+- `php.exe -i`에서 Thread Safety, compiler, PHP Extension Build, PHP API 확인
+- `apache\conf` 아래의 실제 `LoadModule php*_module ...php*apache2_4.dll` 설정 확인
+- MariaDB 현재 major.minor 계열 확인
+
+파일 이름이나 XAMPP 기본값만으로 x64/Thread Safe/Apache module 여부를 추정하지 않는다.
+
+## D-013 메이저 변경은 자동 업데이트 후보에서 제외
+
+Phase 2의 1차 판정에서는 다음 변경을 자동 적용 대상으로 보지 않는다.
+
+- PHP 메이저 버전 변경: 확장 ABI와 설정 마이그레이션 확인 필요
+- MariaDB major.minor 계열 변경: 공식 업그레이드 경로 확인 필요
+
+MariaDB가 같은 major.minor 계열이라도 실제 업데이트 전에는 데이터 백업과 업그레이드 도구 절차가 필요하다.
