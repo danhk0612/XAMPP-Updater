@@ -11,7 +11,10 @@ public sealed record UpdateTargetOption(
     string Label,
     UpdateTargetSource Source,
     bool IsLatest,
-    bool PackageResolved);
+    bool PackageResolved)
+{
+    public string DisplayText => $"{Version} — {Label}{(PackageResolved ? "" : " (패키지 확인 필요)")}";
+}
 
 public enum UpdateTargetSource
 {
