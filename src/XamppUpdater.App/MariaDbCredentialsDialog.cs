@@ -8,6 +8,7 @@ public sealed class MariaDbCredentialsDialog : Window
 {
     private readonly TextBox _userName = new() { Text = "root", MinWidth = 260 };
     private readonly PasswordBox _password = new() { MinWidth = 260 };
+    private MariaDbCredentials? _credentials;
 
     public MariaDbCredentialsDialog(Window owner)
     {
@@ -53,7 +54,12 @@ public sealed class MariaDbCredentialsDialog : Window
             Margin = new Thickness(8, 0, 0, 0),
             IsDefault = true
         };
-        ok.Click += (_, _) => DialogResult = true;
+        ok.Click += (_, _) =>
+        {
+            _credentials = new MariaDbCredentials(_userName.Text.Trim(), _password.Password);
+            DialogResult = true;
+            Close();
+        };
         buttons.Children.Add(cancel);
         buttons.Children.Add(ok);
         panel.Children.Add(buttons);
@@ -61,5 +67,6 @@ public sealed class MariaDbCredentialsDialog : Window
         Content = panel;
     }
 
-    public MariaDbCredentials Credentials => new(_userName.Text.Trim(), _password.Password);
+    public MariaDbCredentials Credentials =>
+        _credentials ?? throw new InvalidOperationException("인증정보가 확정되지 않았습니다.");
 }
