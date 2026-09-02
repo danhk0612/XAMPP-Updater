@@ -47,15 +47,27 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] GUI 온라인 확인 기능
 - [x] 공급원 parser smoke test
 - [x] 공급원 파싱 실패 시 임의 추정 금지
+- [x] 실제 Windows 11 환경에서 온라인 조회 검증
 
 ### 2B — 패키지 호환성 메타데이터
 
+현재 설치 환경 감지:
+
+- [x] Apache/PHP/MariaDB PE 아키텍처(x86/x64/ARM64) 감지
+- [x] PHP Thread Safe / compiler / Extension Build / PHP API 감지
+- [x] Apache 설정에서 실제 PHP `LoadModule` 연동 방식 감지
+- [x] MariaDB 현재 major.minor 계열 감지
+- [x] 설치 환경과 XAMPP 공식 버전을 비교한 1차 호환성 판정
+- [x] PHP 메이저 변경 자동 적용 보류
+- [x] MariaDB 다른 major.minor 계열 직접 교체 금지
+
+후보 패키지 판정:
+
 - [ ] Apache Windows 바이너리 공급원 확정 및 다운로드 파일 메타데이터 추출
-- [ ] Apache 아키텍처/VC 런타임/모듈 ABI 판정
-- [ ] PHP x64 / Thread Safe / compiler / extension ABI 판정
-- [ ] MariaDB x64 ZIP 패키지와 업그레이드 경로 판정
-- [ ] 현재 설치 환경의 x86/x64 및 빌드 정보 추가 감지
-- [ ] 호환 / 조건부 호환 / 비호환 상태 모델 정의
+- [ ] Apache 후보 패키지의 VC 런타임/모듈 ABI 판정
+- [ ] PHP 후보 ZIP의 x64 / Thread Safe / compiler / extension ABI 판정
+- [ ] MariaDB x64 ZIP 패키지와 공식 업그레이드 경로 판정
+- [ ] 호환 / 조건부 호환 / 비호환 상태를 후보 패키지 단위로 모델링
 
 ### 2C — 선택 가능한 버전 카탈로그
 
