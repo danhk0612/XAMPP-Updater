@@ -10,6 +10,11 @@ public partial class MainWindow
     private readonly IMariaDbLogicalBackupService _mariaDbLogicalBackupService = new MariaDbLogicalBackupService();
     private readonly IWindowsServiceController _windowsServiceController = new WindowsServiceController();
 
+    private void InitializeMariaDbSafeBackupUi()
+    {
+        MariaDbBackupButton.Click += MariaDbSafeBackupButton_Click;
+    }
+
     private async void MariaDbSafeBackupButton_Click(object sender, RoutedEventArgs e)
     {
         if (!TryGetActionTarget(sender, out var type, out var target) ||
