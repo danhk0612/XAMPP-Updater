@@ -19,8 +19,8 @@ public sealed record PackageCandidate(
 
 public enum CandidateCompatibilityStatus
 {
-    Compatible,
-    Conditional,
-    Blocked,
+    Automatic,
+    Assisted,
+    ManualReview,
     Unavailable
 }
