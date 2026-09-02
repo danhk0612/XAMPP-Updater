@@ -12,9 +12,15 @@ public sealed record BackupManifest(
     string? ServiceName,
     string? ServiceState,
     bool ProcessWasRunning,
-    IReadOnlyList<BackupManifestFile> Files);
+    IReadOnlyList<BackupManifestFile> Files,
+    LogicalBackupManifest? LogicalBackup = null);
 
 public sealed record BackupManifestFile(
+    string RelativePath,
+    long Size,
+    string Sha256);
+
+public sealed record LogicalBackupManifest(
     string RelativePath,
     long Size,
     string Sha256);
