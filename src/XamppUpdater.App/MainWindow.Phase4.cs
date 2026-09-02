@@ -19,6 +19,8 @@ public partial class MainWindow
 
     private void InitializePhase4Ui()
     {
+        InitializeApachePhase4Ui();
+
         if (_phpExecuteButton is not null)
         {
             return;
