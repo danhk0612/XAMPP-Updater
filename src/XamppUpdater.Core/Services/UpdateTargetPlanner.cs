@@ -52,7 +52,13 @@ public static class UpdateTargetPlanner
         CandidatePackageCatalog candidates,
         SelectableVersionCatalog? selectableVersions)
     {
-        var installed = installation.Components.First(item => item.Type == type).Version;
+        var installedComponent = installation.Components.First(item => item.Type == type);
+        if (!installedComponent.IsInstalled || string.IsNullOrWhiteSpace(installedComponent.Version))
+        {
+            return Array.Empty<UpdateTargetOption>();
+        }
+
+        var installed = installedComponent.Version;
         var onlineVersion = online.Components.First(item => item.Type == type);
         var candidate = candidates.Candidates.First(item => item.Type == type);
         var options = new Dictionary<string, UpdateTargetOption>(StringComparer.OrdinalIgnoreCase);
@@ -110,7 +116,7 @@ public static class UpdateTargetPlanner
             Auto("백업", "apache 폴더와 conf 설정을 업데이트 전 백업합니다."),
             target.PackageResolved
                 ? Auto("패키지 확인", "선택 버전의 Windows Apache 패키지와 VC++ 런타임 조건을 확인합니다.")
-                : Assist("패키지 지정", "자동으로 Windows 바이너리를 찾지 못하면 공식/신뢰 가능한 ZIP을 사용자가 지정하고 내부 구조를 검사합니다."),
+                : Assist("패키지 확인", "자동으로 Windows 바이너리를 찾지 못하면 신뢰 가능한 공급원에서 선택 버전에 맞는 패키지를 확인합니다."),
             Auto("설정 비교", "기존 conf와 새 기본 conf를 비교하고 사용자 변경 설정을 분리합니다."),
             Assist("모듈 호환성", "기존 modules 및 PHP Apache SAPI와 새 httpd의 모듈 ABI를 비교합니다."),
             Auto("설정 이식", "자동으로 유지 가능한 VirtualHost, SSL, 포트 및 include 설정을 새 구성에 반영합니다."),
@@ -134,7 +140,7 @@ public static class UpdateTargetPlanner
             Auto("백업", "php 폴더, php.ini, Apache의 PHP 연동 설정을 백업합니다."),
             target.PackageResolved
                 ? Auto("대상 패키지 준비", $"선택한 PHP {target.Version} 공식 Windows 패키지를 사용합니다.")
-                : Assist("대상 패키지 지정", $"PHP {target.Version} 공식 Windows ZIP을 자동으로 찾지 못하면 사용자가 지정하고 아키텍처/TS/SAPI를 검사합니다."),
+                : Assist("대상 패키지 확인", $"PHP {target.Version} 공식 Windows 패키지를 찾아 아키텍처/TS/SAPI를 검사합니다."),
             Auto("확장 인벤토리", "현재 활성 extension과 추가 DLL을 목록화하고 대상 버전의 기본/번들 확장과 비교합니다."),
             Auto("php.ini 비교", "현재 php.ini와 대상 버전의 기본 설정을 키 단위로 비교합니다."),
             Assist("설정 마이그레이션", sameSeries
@@ -168,7 +174,7 @@ public static class UpdateTargetPlanner
                 : "현재 버전에서 대상 버전까지 필요한 중간 MariaDB 계열과 순서를 계산합니다."),
             target.PackageResolved
                 ? Assist("단계별 패키지 준비", "선택 버전 및 필요한 중간 버전의 공식 Windows 패키지를 순서대로 준비합니다.")
-                : Assist("패키지 지정", "공식 패키지 URL을 자동 확정하지 못한 단계는 패키지 페이지 또는 사용자가 지정한 ZIP을 통해 계속 진행합니다."),
+                : Assist("패키지 확인", "각 단계에 필요한 공식 Windows 패키지를 자동으로 확인해 준비합니다."),
             Assist("단계별 바이너리 교체", "각 단계에서 설정/서비스 경로를 유지하며 바이너리를 순차 교체합니다."),
             Auto("업그레이드 도구", "각 단계에서 지원되는 mariadb-upgrade/mysql_upgrade 계열 도구를 실행합니다."),
             Auto("상태 검증", "서버 기동, 시스템 테이블, 사용자 DB 접근과 오류 로그를 확인합니다."),
