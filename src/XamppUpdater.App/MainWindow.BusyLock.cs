@@ -8,6 +8,7 @@ public partial class MainWindow
     {
         base.OnContentRendered(e);
         OnlineCheckButton.IsEnabledChanged += OnlineCheckButton_IsEnabledChanged;
+        InitializeMariaDbSafeBackupUi();
         SyncWindowInputLock();
     }
 
