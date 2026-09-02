@@ -84,10 +84,12 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] PHP 메이저/마이너 변경 시 php.ini/확장/Apache SAPI 마이그레이션 계획 생성
 - [x] MariaDB 계열 변경 시 중간 업그레이드 단계가 필요한 경로로 계획 생성
 - [x] 선택 목록을 각 major.minor 계열의 최신 패치 1개로 축약
+- [x] 최신 전체 버전과 계열별 최신 버전의 중복 제거
 - [x] PHP 계열별 최신 Windows 패키지 정보 연결
 - [x] MariaDB 계열별 최신 공식 winx64 패키지 페이지 연결
 - [x] Apache ASF 릴리스에서 계열별 최신 버전 선택지 생성
 - [x] 계열별 최신 필터 parser smoke test
+- [x] 별도 ZIP 직접 지정 UI 제거
 - [ ] 선택한 Apache 버전의 Windows ZIP URL을 가능한 공급원에서 추가 자동 탐색
 - [ ] MariaDB 선택 버전 패키지 페이지에서 실제 ZIP/manifest/PGP 링크 해석
 - [ ] SHA256/PGP 등 검증 메타데이터 확보
