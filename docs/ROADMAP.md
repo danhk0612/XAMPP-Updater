@@ -16,7 +16,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 
 ## Phase 1 — Foundation & Local Detection
 
-현재 구현 단계.
+완료.
 
 - [x] .NET 8 WPF GUI 프로젝트 골격
 - [x] Core와 GUI 분리
@@ -30,26 +30,48 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] Apache/MariaDB 실제 서비스명 표시
 - [x] 실제 MariaDB/MySQL 버전 출력 예제에 대한 parser smoke test
 - [x] 임시 XAMPP 구조를 이용한 수동 경로 검사 smoke test
+- [x] 실제 Windows 11 + XAMPP 환경 검증
 - [x] Phase 1은 읽기 전용으로 동작
-
-### Phase 1 완료 조건
-
-1. Windows 11에서 앱이 실행된다.
-2. 일반적인 XAMPP 설치를 자동 감지할 수 있다.
-3. 자동 감지가 실패해도 사용자가 설치 루트를 직접 지정할 수 있다.
-4. Apache/PHP/MariaDB의 설치 여부와 현재 버전을 GUI에서 확인할 수 있다.
-5. 등록된 Apache/MariaDB 서비스명이 고정값이 아니라 시스템에서 감지된다.
-6. 파일 교체, 서비스 중지, 설정 변경 등 시스템 변경 작업을 하지 않는다.
-7. Windows CI에서 빌드와 Phase 1 smoke test가 통과한다.
 
 ## Phase 2 — Version Catalog & Compatibility
 
-- 각 구성요소의 사용 가능한 버전 목록 공급원 확정
-- 최신 버전 조회
-- 특정 버전 선택
-- x64, VC 런타임, Thread Safe 여부 등 Windows/XAMPP 호환성 메타데이터 정의
-- 다운로드 URL과 해시/서명 검증 방식 정의
-- XAMPP 번들 구조와 순정 upstream ZIP 구조 차이 조사
+진행 중.
+
+### 2A — 공급원과 최신 버전 조회
+
+- [x] Apache 최신 릴리스 공급원: Apache HTTP Server 공식 다운로드
+- [x] PHP 최신 Windows 릴리스 공급원: PHP 공식 Windows 다운로드
+- [x] MariaDB 최신 Community Server 공급원: MariaDB 공식 다운로드
+- [x] XAMPP 공식 번들 기준 공급원: Apache Friends Windows 다운로드
+- [x] upstream 최신 버전과 XAMPP 공식 번들 버전을 별도 모델로 관리
+- [x] GUI 온라인 확인 기능
+- [x] 공급원 parser smoke test
+- [x] 공급원 파싱 실패 시 임의 추정 금지
+
+### 2B — 패키지 호환성 메타데이터
+
+- [ ] Apache Windows 바이너리 공급원 확정 및 다운로드 파일 메타데이터 추출
+- [ ] Apache 아키텍처/VC 런타임/모듈 ABI 판정
+- [ ] PHP x64 / Thread Safe / compiler / extension ABI 판정
+- [ ] MariaDB x64 ZIP 패키지와 업그레이드 경로 판정
+- [ ] 현재 설치 환경의 x86/x64 및 빌드 정보 추가 감지
+- [ ] 호환 / 조건부 호환 / 비호환 상태 모델 정의
+
+### 2C — 선택 가능한 버전 카탈로그
+
+- [ ] 지원되는 과거 버전 목록 조회
+- [ ] 특정 버전 선택 UI
+- [ ] 선택 버전별 패키지 URL 결정
+- [ ] SHA256/PGP 등 검증 메타데이터 확보
+- [ ] 다운로드 전 호환성 판정 결과 표시
+
+### Phase 2 완료 조건
+
+1. 최신 버전과 XAMPP 공식 번들 기준 버전을 구분하여 표시한다.
+2. 사용자가 선택 가능한 버전 목록을 제공한다.
+3. 각 후보가 현재 설치에 적용 가능한지 자동 판정한다.
+4. 실제 다운로드 전에 아키텍처, 런타임, Thread Safe/ABI, MariaDB 업그레이드 경로를 확인한다.
+5. 해시 또는 서명 검증 정보를 확보하지 못한 패키지는 자동 업데이트 대상으로 허용하지 않는다.
 
 > Apache/PHP/MariaDB는 단순히 최신 ZIP을 덮어쓰는 방식으로 처리하지 않는다. Phase 2에서 공급원과 호환성 규칙을 먼저 확정한다.
 
