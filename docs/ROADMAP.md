@@ -25,104 +25,90 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] XAMPP 제거 정보 레지스트리 기반 설치 경로 감지
 - [x] Apache/MariaDB Windows 서비스 `ImagePath` 기반 설치 경로 감지
 - [x] 설치 경로 직접 입력/폴더 선택
-- [x] Apache `httpd.exe -v` 버전 확인
-- [x] PHP `php.exe -v` 버전 확인
-- [x] MariaDB `mysqld.exe --version` 버전 확인
+- [x] Apache / PHP / MariaDB 현재 버전 확인
 - [x] Apache/MariaDB 실제 서비스명 표시
-- [x] 실제 MariaDB/MySQL 버전 출력 예제에 대한 parser smoke test
-- [x] 임시 XAMPP 구조를 이용한 수동 경로 검사 smoke test
 - [x] 실제 Windows 11 + XAMPP 환경 검증
-- [x] Phase 1은 읽기 전용으로 동작
 
 ## Phase 2 — Version Catalog & Compatibility
 
-진행 중.
+완료.
 
-### 2A — 공급원과 최신 버전 조회
-
-- [x] Apache 최신 릴리스 공급원: Apache HTTP Server 공식 다운로드
-- [x] PHP 최신 Windows 릴리스 공급원: PHP 공식 Windows 다운로드
-- [x] MariaDB 최신 Community Server 공급원: MariaDB 공식 다운로드
-- [x] XAMPP 공식 번들 기준 공급원: Apache Friends Windows 다운로드
-- [x] upstream 최신 버전과 XAMPP 공식 번들 버전을 별도 모델로 관리
-- [x] GUI 온라인 확인 기능
-- [x] 공급원 parser smoke test
-- [x] 공급원 파싱 실패 시 임의 추정 금지
-- [x] 실제 Windows 11 환경에서 온라인 조회 검증
-
-### 2B — 패키지 호환성 메타데이터
-
-현재 설치 환경 감지:
-
-- [x] Apache/PHP/MariaDB PE 아키텍처(x86/x64/ARM64) 감지
+- [x] Apache / PHP / MariaDB upstream 최신 버전 조회
+- [x] Apache Friends XAMPP 공식 번들 기준 버전 조회
+- [x] PE 아키텍처(x86/x64/ARM64) 감지
 - [x] PHP Thread Safe / compiler / Extension Build / PHP API 감지
-- [x] Apache 설정에서 실제 PHP `LoadModule` 연동 방식 감지
+- [x] Apache의 실제 PHP `LoadModule` 연동 방식 감지
 - [x] MariaDB 현재 major.minor 계열 감지
-- [x] 설치 환경과 XAMPP 공식 버전을 비교한 1차 호환성 판정
-- [x] 실제 Windows 11 환경에서 로컬 호환성 프로파일 검증
-
-후보 패키지 판정:
-
-- [x] Apache Lounge Windows ZIP 후보 탐색 및 version/arch/compiler 메타데이터 추출
-- [x] PHP Windows archive에서 현재 major.minor / arch / TS / compiler 일치 패치 후보 탐색
-- [x] MariaDB 공식 다운로드에서 현재 major.minor 계열 최신 winx64 후보 탐색
+- [x] 현재 환경에 맞는 패치 후보 탐색
 - [x] 후보 상태를 `자동 가능 / 보조 업데이트 / 검토 후 진행 / 후보 없음`으로 모델링
-- [x] 해시가 없는 PHP archive도 보조 업데이트 후보로 유지
-- [x] GUI에서 실제 후보 버전과 자동화 수준 표시
-- [ ] Apache 후보 ZIP 내부 모듈/의존 DLL 기준 ABI 세부 검증
-- [ ] PHP 후보 ZIP의 Extension Build / Apache SAPI DLL을 실제 압축 내용 기준으로 검증
-- [ ] MariaDB SHA256 manifest 실제 값 확보 및 ZIP 해시와 연결
-- [ ] MariaDB `mariadb-upgrade` 실행 조건/절차 확정
-
-### 2C — 선택 가능한 버전 카탈로그
-
-- [x] 현재 설치 / 현재 계열 추천 / XAMPP 공식 / upstream 최신을 목표 버전 선택지로 통합
-- [x] 최신 버전을 실제 선택 가능한 대상으로 노출
-- [x] Apache/PHP/MariaDB별 목표 버전 선택 UI
+- [x] 최신 버전 및 각 major.minor 계열의 최신 패치 1개를 목표 버전으로 선택 가능
 - [x] 현재 버전 → 선택 버전 업데이트 경로 계산
-- [x] 작업을 자동 / 보조 / 사용자 확인 단계로 분류
-- [x] PHP 메이저/마이너 변경 시 php.ini/확장/Apache SAPI 마이그레이션 계획 생성
-- [x] MariaDB 계열 변경 시 중간 업그레이드 단계가 필요한 경로로 계획 생성
-- [x] 선택 목록을 각 major.minor 계열의 최신 패치 1개로 축약
-- [x] 최신 전체 버전과 계열별 최신 버전의 중복 제거
-- [x] PHP 계열별 최신 Windows 패키지 정보 연결
-- [x] MariaDB 계열별 최신 공식 winx64 패키지 페이지 연결
-- [x] Apache ASF 릴리스에서 계열별 최신 버전 선택지 생성
-- [x] 계열별 최신 필터 parser smoke test
-- [x] 별도 ZIP 직접 지정 UI 제거
-- [ ] 선택한 Apache 버전의 Windows ZIP URL을 가능한 공급원에서 추가 자동 탐색
-- [ ] MariaDB 선택 버전 패키지 페이지에서 실제 ZIP/manifest/PGP 링크 해석
-- [ ] SHA256/PGP 등 검증 메타데이터 확보
-- [ ] 상세 변경사항 비교 화면
+- [x] PHP 메이저/마이너 변경의 php.ini/확장/Apache SAPI 마이그레이션 계획
+- [x] MariaDB 계열 변경의 단계적 업그레이드 계획
+- [x] 계열별 최신 버전 필터 smoke test
 
-### Phase 2 완료 조건
-
-1. 최신 버전과 XAMPP 공식 번들 기준 버전을 구분하여 표시한다.
-2. 사용자가 최신 및 각 major.minor 계열의 최신 버전을 선택할 수 있다.
-3. 현재 버전에서 선택 버전으로 이동하기 위해 필요한 작업을 자동 계산한다.
-4. 각 작업을 자동 처리 / 보조 처리 / 사용자 확인으로 분류한다.
-5. 실제 다운로드 전에 아키텍처, 런타임, Thread Safe/ABI, MariaDB 업그레이드 경로를 확인한다.
-
-> Apache/PHP/MariaDB는 단순히 최신 ZIP을 덮어쓰는 방식으로 처리하지 않는다. 자동화가 어려운 경우에도 백업 → 비교 → 사용자 확인 → 적용 → 검증 순서의 보조 업데이트를 제공한다.
+패키지 다운로드 시점의 SHA256/PGP, 압축 내부 구조, ABI 세부 검증은 Phase 3의 실제 업데이트 준비 과정에서 수행한다.
 
 ## Phase 3 — Backup, Compare & Preflight
 
-- 실행 중 프로세스 및 Windows 서비스 상태 점검
-- 업데이트 대상 파일 잠금 여부 확인
-- 구성요소별 설정/확장/모듈 파일 manifest 생성
-- 업데이트 전 자동 백업
-- 신규 패키지와 기존 설치의 파일 구조 비교
-- 기존 설정과 신규 기본 설정 diff 생성
-- 자동 병합 가능 / 사용자 확인 필요 / 폐기 후보 분류
-- MariaDB 데이터 디렉터리 보호 정책 확정
-- 롤백에 필요한 manifest 생성
+진행 중.
+
+### 3A — 현재 설치 Preflight
+
+- [x] 구성요소별 `업데이트 준비 점검` UI
+- [x] 현재 프로세스 실행 여부 확인
+- [x] 등록 서비스 상태 확인
+- [x] 구성요소 전체 백업 예상 파일 수/용량 산출
+- [x] Apache `.conf`, PHP `.ini*`, MariaDB `my.ini/my.cnf` 설정 파일 manifest 생성
+- [x] 설정 파일 SHA256 기록
+- [x] 기본 백업 저장 위치 산출
+- [x] MariaDB data 디렉터리 보호/논리 백업 필요성 표시
+- [x] Preflight smoke test
+
+### 3B — 실제 백업과 롤백 manifest
+
+- [x] 업데이트 직전 서비스/프로세스 상태 스냅샷 저장
+- [x] Apache/PHP 구성요소 폴더 자동 백업
+- [x] MariaDB 설정 + data 물리 백업 엔진
+- [x] MariaDB `mariadb-dump/mysqldump` 전체 논리 백업
+- [x] MariaDB 자동 무인증/root 무암호 시도 후 인증 실패 시 사용자 계정/암호 요청
+- [x] MariaDB 서비스 중지 → 물리 백업 → 원래 RUNNING 상태 복구 흐름
+- [x] 백업 manifest(JSON) 저장
+- [x] 논리 백업 SQL의 크기/SHA256을 manifest에 기록
+- [x] 파일별 크기/SHA256/원본 경로 기록
+- [x] 롤백에 필요한 서비스 상태와 대상 버전 기록
+- [x] 백업/패키지/비교 작업 중 UI 동시 입력 방지
+
+> Windows 서비스 중지/시작에 필요한 권한이 없는 경우에는 논리 백업까지 생성한 뒤 물리 백업 단계에서 관리자 권한 필요 오류를 표시한다. 앱 전체 권한 상승 정책은 Phase 4 실행 엔진에서 확정한다.
+
+### 3C — 패키지 준비와 비교
+
+- [x] 선택 버전 실제 패키지 URL 확정 및 다운로드 가능한 공급원 연결
+- [x] MariaDB 공식 `sha256sums.txt` 자동 검증
+- [x] 다운로드 패키지 로컬 SHA256 기록
+- [x] ZIP 내부 PE 아키텍처/필수 실행 파일/모듈 구조 검사
+- [x] 기존 설치와 신규 패키지 파일 인벤토리 비교
+- [x] 기존 설정과 신규 기본 설정 diff 생성
+- [ ] PGP가 제공되는 패키지 서명 신뢰 검증
+- [ ] 자동 병합 가능 / 사용자 확인 필요 / 폐기 후보 상세 분류
+- [ ] Apache 외부 모듈 및 PHP extension ABI/런타임 상세 판정
+- [ ] MariaDB 목표 버전별 중간 업그레이드 경로를 실제 패키지 단계로 확정
+
+### Phase 3 완료 조건
+
+1. 실제 업데이트 전에 서비스/프로세스/파일 상태를 재현 가능한 manifest로 저장한다.
+2. 구성요소별 복구 가능한 백업을 생성한다.
+3. 대상 패키지를 다운로드하고 가능한 검증 수단을 자동 적용한다.
+4. 기존 설정과 신규 패키지 차이를 사용자에게 적용 전에 보여준다.
+5. 실제 교체를 시작하기 전에 롤백 가능한 상태임을 확인한다.
 
 ## Phase 4 — Assisted Update Engine
 
 - 업데이트 단계별 실행 계획 화면
 - Apache 서비스 중지 → 백업 → 패키지 교체 → 설정/모듈 복원 → 구성 검사 → 재시작
 - PHP 백업 → 패키지 교체 → php.ini/확장 설정 비교 및 선택 병합 → Apache SAPI 재검증
-- MariaDB 서비스 중지 → 전체 데이터/설정 백업 → 바이너리 교체 → `mariadb-upgrade` → 상태 검증 → 재시작
+- MariaDB 논리 백업 → 서비스 중지 → 전체 data/설정 물리 백업 → 바이너리 교체 → `mariadb-upgrade` → 상태 검증 → 재시작
+- Windows 서비스 제어 권한/UAC 처리 정책
 - 자동 처리 불가능한 충돌은 해당 단계에서만 사용자 선택 요청
 - 실패 시 자동 롤백
 - 최신/선택 버전 업데이트 실행
