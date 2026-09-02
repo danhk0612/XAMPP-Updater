@@ -10,10 +10,12 @@ public partial class MainWindow : Window
     private readonly IXamppInstallationDetector _detector = new XamppInstallationDetector();
     private readonly IOnlineVersionCatalogService _onlineCatalog = new OnlineVersionCatalogService();
     private readonly IInstallationCompatibilityDetector _compatibilityDetector = new InstallationCompatibilityDetector();
+    private readonly ICandidatePackageCatalogService _candidateCatalog = new CandidatePackageCatalogService();
 
     private XamppInstallation? _lastInstallation;
     private InstallationCompatibilityProfile? _lastProfile;
     private OnlineVersionCatalog? _lastCatalog;
+    private CandidatePackageCatalog? _lastCandidates;
 
     public MainWindow()
     {
@@ -108,9 +110,11 @@ public partial class MainWindow : Window
 
             _lastInstallation = result.installation;
             _lastProfile = result.profile;
+            _lastCandidates = null;
             InstallPathComboBox.Text = result.installation.RootPath;
             RenderInstallation(result.installation);
             RenderCompatibilityProfile(result.profile);
+            ClearCandidates();
 
             if (_lastCatalog is not null)
             {
@@ -131,12 +135,25 @@ public partial class MainWindow : Window
 
     private async Task CheckOnlineVersionsAsync()
     {
-        SetBusy(true, "공식 공급원에서 최신 버전을 확인하는 중...");
+        if (_lastInstallation is null || _lastProfile is null)
+        {
+            StatusText.Text = "먼저 XAMPP 설치 환경을 확인하세요.";
+            return;
+        }
+
+        SetBusy(true, "최신 버전과 현재 환경에 맞는 실제 패키지 후보를 확인하는 중...");
 
         try
         {
-            _lastCatalog = await _onlineCatalog.GetLatestAsync();
+            var catalogTask = _onlineCatalog.GetLatestAsync();
+            var candidateTask = _candidateCatalog.GetCandidatesAsync(_lastInstallation, _lastProfile);
+            await Task.WhenAll(catalogTask, candidateTask);
+
+            _lastCatalog = await catalogTask;
+            _lastCandidates = await candidateTask;
+
             RenderOnlineCatalog(_lastCatalog);
+            RenderCandidates(_lastCandidates);
             StatusText.Text = $"온라인 확인 완료: {_lastCatalog.CheckedAt:yyyy-MM-dd HH:mm:ss}";
         }
         catch (Exception ex)
@@ -226,6 +243,66 @@ public partial class MainWindow : Window
                     break;
             }
         }
+    }
+
+    private void RenderCandidates(CandidatePackageCatalog catalog)
+    {
+        foreach (var candidate in catalog.Candidates)
+        {
+            var text = FormatCandidate(candidate);
+            switch (candidate.Type)
+            {
+                case XamppComponentType.Apache:
+                    ApacheCandidateText.Text = text;
+                    break;
+                case XamppComponentType.Php:
+                    PhpCandidateText.Text = text;
+                    break;
+                case XamppComponentType.MariaDb:
+                    MariaDbCandidateText.Text = text;
+                    break;
+            }
+        }
+    }
+
+    private static string FormatCandidate(PackageCandidate candidate)
+    {
+        var status = candidate.Status switch
+        {
+            CandidateCompatibilityStatus.Compatible => "호환",
+            CandidateCompatibilityStatus.Conditional => "조건부",
+            CandidateCompatibilityStatus.Blocked => "차단",
+            _ => "없음"
+        };
+
+        if (candidate.Version is null)
+        {
+            return $"실제 후보: 없음 ({candidate.Reason})";
+        }
+
+        var details = new List<string>();
+        if (candidate.Compiler is not null)
+        {
+            details.Add(candidate.Compiler);
+        }
+        if (candidate.ThreadSafe is not null)
+        {
+            details.Add(candidate.ThreadSafe.Value ? "TS" : "NTS");
+        }
+        if (candidate.Sha256 is not null)
+        {
+            details.Add("SHA256");
+        }
+
+        var suffix = details.Count == 0 ? string.Empty : $" / {string.Join(" / ", details)}";
+        return $"실제 후보: {candidate.Version} [{status}]{suffix}";
+    }
+
+    private void ClearCandidates()
+    {
+        ApacheCandidateText.Text = "실제 후보: -";
+        PhpCandidateText.Text = "실제 후보: -";
+        MariaDbCandidateText.Text = "실제 후보: -";
     }
 
     private void SetBusy(bool isBusy, string? message = null)
