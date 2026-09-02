@@ -1,8 +1,8 @@
 <Window x:Class="XamppUpdater.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="XAMPP Updater" Height="560" Width="860"
-        MinHeight="520" MinWidth="760"
+        Title="XAMPP Updater" Height="640" Width="980"
+        MinHeight="600" MinWidth="900"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI">
     <Grid Margin="20">
@@ -16,7 +16,7 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,16">
             <TextBlock Text="XAMPP Updater" FontSize="24" FontWeight="SemiBold" />
             <TextBlock Margin="0,5,0,0" Foreground="DimGray"
-                       Text="Apache / PHP / MariaDB 설치 상태와 현재 버전을 확인합니다. Phase 1에서는 시스템을 변경하지 않습니다." />
+                       Text="설치된 버전과 upstream 최신 버전, XAMPP 공식 번들 기준 버전을 비교합니다. 아직 업데이트는 실행하지 않습니다." />
         </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,10">
@@ -25,11 +25,13 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <ComboBox x:Name="InstallPathComboBox" Grid.Column="0" Height="34" IsEditable="True" VerticalContentAlignment="Center" />
             <Button Grid.Column="1" Margin="8,0,0,0" Padding="14,0" Content="자동 감지" Click="AutoDetectButton_Click" />
             <Button Grid.Column="2" Margin="8,0,0,0" Padding="14,0" Content="폴더 선택" Click="BrowseButton_Click" />
             <Button Grid.Column="3" Margin="8,0,0,0" Padding="14,0" Content="확인" Click="InspectButton_Click" />
+            <Button x:Name="OnlineCheckButton" Grid.Column="4" Margin="8,0,0,0" Padding="14,0" Content="온라인 확인" Click="OnlineCheckButton_Click" />
         </Grid>
 
         <TextBlock x:Name="StatusText" Grid.Row="2" Margin="0,0,0,14" Foreground="DimGray" Text="XAMPP 설치 경로를 확인하는 중..." />
@@ -45,7 +47,11 @@
                 <StackPanel>
                     <TextBlock Text="Apache" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="ApacheVersionText" Margin="0,14,0,0" FontSize="16" Text="-" />
-                    <TextBlock x:Name="ApacheServiceText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DimGray" Text="서비스: -" />
+                    <TextBlock x:Name="ApacheLatestText" Margin="0,12,0,0" Text="upstream 최신: -" />
+                    <TextBlock x:Name="ApacheXamppText" Margin="0,5,0,0" Text="XAMPP 공식: -" />
+                    <TextBlock x:Name="ApacheCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
+                    <Separator Margin="0,12,0,8" />
+                    <TextBlock x:Name="ApacheServiceText" TextWrapping="Wrap" Foreground="DimGray" Text="서비스: -" />
                     <TextBlock x:Name="ApachePathText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DimGray" Text="경로: -" />
                 </StackPanel>
             </Border>
@@ -54,7 +60,11 @@
                 <StackPanel>
                     <TextBlock Text="PHP" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="PhpVersionText" Margin="0,14,0,0" FontSize="16" Text="-" />
-                    <TextBlock Margin="0,8,0,0" Foreground="DimGray" Text="서비스: 해당 없음" />
+                    <TextBlock x:Name="PhpLatestText" Margin="0,12,0,0" Text="upstream 최신: -" />
+                    <TextBlock x:Name="PhpXamppText" Margin="0,5,0,0" Text="XAMPP 공식: -" />
+                    <TextBlock x:Name="PhpCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
+                    <Separator Margin="0,12,0,8" />
+                    <TextBlock Foreground="DimGray" Text="서비스: 해당 없음" />
                     <TextBlock x:Name="PhpPathText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DimGray" Text="경로: -" />
                 </StackPanel>
             </Border>
@@ -63,7 +73,11 @@
                 <StackPanel>
                     <TextBlock Text="MariaDB" FontSize="18" FontWeight="SemiBold" />
                     <TextBlock x:Name="MariaDbVersionText" Margin="0,14,0,0" FontSize="16" Text="-" />
-                    <TextBlock x:Name="MariaDbServiceText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DimGray" Text="서비스: -" />
+                    <TextBlock x:Name="MariaDbLatestText" Margin="0,12,0,0" Text="upstream 최신: -" />
+                    <TextBlock x:Name="MariaDbXamppText" Margin="0,5,0,0" Text="XAMPP 공식: -" />
+                    <TextBlock x:Name="MariaDbCompatibilityText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
+                    <Separator Margin="0,12,0,8" />
+                    <TextBlock x:Name="MariaDbServiceText" TextWrapping="Wrap" Foreground="DimGray" Text="서비스: -" />
                     <TextBlock x:Name="MariaDbPathText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DimGray" Text="경로: -" />
                     <TextBlock x:Name="MariaDbDetailText" Margin="0,8,0,0" TextWrapping="Wrap" Foreground="DarkGoldenrod" />
                 </StackPanel>
