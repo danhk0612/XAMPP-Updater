@@ -90,7 +90,7 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
             }
 
             migrated.Add($"; XAMPP Updater disabled missing/incompatible extension: {line.Trim()}");
-            warnings.Add($"새 PHP 패키지에 없어 비활성화: {configuredName}");
+            warnings.Add($"새 PHP 패키지/호환 확장에서 찾지 못해 비활성화: {configuredName}");
         }
 
         var destination = Path.Combine(newPhpRoot, "php.ini");
@@ -99,30 +99,52 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         return new PhpIniMigrationResult(true, destination, warnings);
     }
 
+    internal static string? NormalizeExtensionName(string configuredName)
+    {
+        var fileName = Path.GetFileName(configuredName.Trim().Trim('"', '\''));
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
+
+        if (fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            fileName = fileName[..^4];
+        }
+
+        if (fileName.StartsWith("php_", StringComparison.OrdinalIgnoreCase))
+        {
+            fileName = fileName[4..];
+        }
+        else if (fileName.StartsWith("ext-", StringComparison.OrdinalIgnoreCase))
+        {
+            fileName = fileName[4..];
+        }
+        else
+        {
+            var packageMatch = LegacyPackageNameRegex().Match(fileName);
+            if (packageMatch.Success)
+            {
+                fileName = packageMatch.Groups["name"].Value;
+            }
+        }
+
+        return fileName.Trim().Replace('-', '_');
+    }
+
     internal static string? ResolveExtensionDll(string configuredName, IReadOnlySet<string> availableDlls)
     {
         var fileName = Path.GetFileName(configuredName.Trim().Trim('"', '\''));
         if (string.IsNullOrWhiteSpace(fileName)) return null;
 
-        var candidates = new List<string>();
-        if (fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        var normalized = NormalizeExtensionName(fileName);
+        var candidates = new List<string> { fileName };
+        if (!fileName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) candidates.Add(fileName + ".dll");
+        if (!string.IsNullOrWhiteSpace(normalized))
         {
-            candidates.Add(fileName);
-            if (!fileName.StartsWith("php_", StringComparison.OrdinalIgnoreCase))
-            {
-                candidates.Add("php_" + fileName);
-            }
-        }
-        else
-        {
-            candidates.Add(fileName + ".dll");
-            if (!fileName.StartsWith("php_", StringComparison.OrdinalIgnoreCase))
-            {
-                candidates.Add("php_" + fileName + ".dll");
-            }
+            candidates.Add(normalized + ".dll");
+            candidates.Add("php_" + normalized + ".dll");
         }
 
-        return candidates.FirstOrDefault(availableDlls.Contains);
+        return candidates.Distinct(StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(availableDlls.Contains);
     }
 
     private static string? ResolveMigratedPath(string configuredPath, string oldPhpRoot, string newPhpRoot)
@@ -220,6 +242,9 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
 
     [GeneratedRegex(@"^\s*browscap\s*=\s*(?<value>[^;#]+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex BrowscapRegex();
+
+    [GeneratedRegex(@"^php(?:\d+(?:\.\d+)*)?[-_](?<name>.+)$", RegexOptions.IgnoreCase)]
+    private static partial Regex LegacyPackageNameRegex();
 }
 
 public sealed record PhpIniMigrationResult(
