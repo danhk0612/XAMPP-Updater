@@ -4,12 +4,12 @@ namespace XamppUpdater.Core.Services;
 
 public interface IPhpIniMigrationService
 {
-    PhpIniMigrationResult Migrate(string currentIniPath, string newPhpRoot);
+    PhpIniMigrationResult Migrate(string currentIniPath, string newPhpRoot, string? targetVersion = null);
 }
 
 public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
 {
-    public PhpIniMigrationResult Migrate(string currentIniPath, string newPhpRoot)
+    public PhpIniMigrationResult Migrate(string currentIniPath, string newPhpRoot, string? targetVersion = null)
     {
         if (!File.Exists(currentIniPath))
         {
@@ -21,10 +21,42 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         var warnings = new List<string>();
         var migrated = new List<string>(lines.Length + 4);
         var extRoot = Path.Combine(newPhpRoot, "ext");
+        var oldPhpRoot = Path.GetDirectoryName(currentIniPath) ?? string.Empty;
         var availableDlls = EnumerateAvailableDlls(newPhpRoot, extRoot);
+        var disableLegacySessionSettings = IsVersionAtLeast(targetVersion, 8, 4);
 
         foreach (var line in lines)
         {
+            if (disableLegacySessionSettings && TryGetDirectiveName(line, out var directiveName) &&
+                (directiveName.Equals("session.sid_length", StringComparison.OrdinalIgnoreCase) ||
+                 directiveName.Equals("session.sid_bits_per_character", StringComparison.OrdinalIgnoreCase)))
+            {
+                migrated.Add($"; XAMPP Updater disabled deprecated setting for PHP {targetVersion}: {line.Trim()}");
+                warnings.Add($"PHP {targetVersion}에서 deprecated 설정 비활성화: {directiveName}");
+                continue;
+            }
+
+            var browscap = BrowscapRegex().Match(line);
+            if (browscap.Success)
+            {
+                var rawValue = browscap.Groups["value"].Value.Trim().Trim('"', '\'');
+                var migratedBrowscap = ResolveMigratedPath(rawValue, oldPhpRoot, newPhpRoot);
+                if (migratedBrowscap is not null && File.Exists(migratedBrowscap))
+                {
+                    migrated.Add($"browscap=\"{migratedBrowscap}\"");
+                    if (!PathEquals(rawValue, migratedBrowscap))
+                    {
+                        warnings.Add($"browscap 경로 자동 변환: {rawValue} → {migratedBrowscap}");
+                    }
+                }
+                else
+                {
+                    migrated.Add($"; XAMPP Updater disabled missing browscap file: {line.Trim()}");
+                    warnings.Add($"새 PHP 환경에 browscap 파일이 없어 비활성화: {rawValue}");
+                }
+                continue;
+            }
+
             var match = ExtensionRegex().Match(line);
             if (!match.Success)
             {
@@ -92,6 +124,68 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         return candidates.FirstOrDefault(availableDlls.Contains);
     }
 
+    private static string? ResolveMigratedPath(string configuredPath, string oldPhpRoot, string newPhpRoot)
+    {
+        if (string.IsNullOrWhiteSpace(configuredPath)) return null;
+
+        try
+        {
+            if (Path.IsPathFullyQualified(configuredPath) && !string.IsNullOrWhiteSpace(oldPhpRoot))
+            {
+                var oldFull = Path.GetFullPath(oldPhpRoot);
+                var configuredFull = Path.GetFullPath(configuredPath);
+                var relative = Path.GetRelativePath(oldFull, configuredFull);
+                if (!relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) && relative != "..")
+                {
+                    return Path.GetFullPath(Path.Combine(newPhpRoot, relative));
+                }
+
+                return configuredFull;
+            }
+
+            return Path.GetFullPath(Path.Combine(newPhpRoot, configuredPath));
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool TryGetDirectiveName(string line, out string name)
+    {
+        name = string.Empty;
+        var trimmed = line.Trim();
+        if (trimmed.Length == 0 || trimmed.StartsWith(';') || trimmed.StartsWith('#')) return false;
+        var equals = trimmed.IndexOf('=');
+        if (equals <= 0) return false;
+        name = trimmed[..equals].Trim();
+        return name.Length > 0;
+    }
+
+    private static bool IsVersionAtLeast(string? version, int major, int minor)
+    {
+        if (string.IsNullOrWhiteSpace(version)) return false;
+        var parts = version.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 2 || !int.TryParse(parts[0], out var actualMajor) || !int.TryParse(parts[1], out var actualMinor))
+        {
+            return false;
+        }
+
+        return actualMajor > major || actualMajor == major && actualMinor >= minor;
+    }
+
+    private static bool PathEquals(string left, string right)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private static HashSet<string> EnumerateAvailableDlls(string phpRoot, string extRoot)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -116,6 +210,9 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
 
     [GeneratedRegex(@"^\s*(?<directive>(?:zend_)?extension)\s*=\s*(?<value>[^;#]+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex ExtensionRegex();
+
+    [GeneratedRegex(@"^\s*browscap\s*=\s*(?<value>[^;#]+?)\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex BrowscapRegex();
 }
 
 public sealed record PhpIniMigrationResult(
