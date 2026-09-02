@@ -45,9 +45,11 @@ public sealed partial class InstallationCompatibilityDetector : IInstallationCom
     {
         foreach (Match match in PhpLoadModuleRegex().Matches(content))
         {
-            var moduleName = match.Groups["module"].Value;
-            var modulePath = match.Groups["path"].Value;
-            return new ApachePhpIntegration(true, moduleName, modulePath, configPath);
+            return new ApachePhpIntegration(
+                true,
+                match.Groups["module"].Value,
+                match.Groups["path"].Value,
+                configPath);
         }
 
         return new ApachePhpIntegration(false, null, null, null);
@@ -66,8 +68,7 @@ public sealed partial class InstallationCompatibilityDetector : IInstallationCom
         {
             try
             {
-                var content = File.ReadAllText(configPath);
-                var result = ParseApachePhpIntegration(configPath, content);
+                var result = ParseApachePhpIntegration(configPath, File.ReadAllText(configPath));
                 if (result.IsModuleLoaded)
                 {
                     return result;
@@ -99,9 +100,9 @@ public sealed partial class InstallationCompatibilityDetector : IInstallationCom
             using var peReader = new PEReader(stream);
             return peReader.PEHeaders.CoffHeader.Machine switch
             {
-                System.Reflection.PortableExecutable.Machine.I386 => BinaryArchitecture.X86,
-                System.Reflection.PortableExecutable.Machine.Amd64 => BinaryArchitecture.X64,
-                System.Reflection.PortableExecutable.Machine.Arm64 => BinaryArchitecture.Arm64,
+                Machine.I386 => BinaryArchitecture.X86,
+                Machine.Amd64 => BinaryArchitecture.X64,
+                Machine.Arm64 => BinaryArchitecture.Arm64,
                 _ => BinaryArchitecture.Unknown
             };
         }
@@ -201,6 +202,6 @@ public sealed partial class InstallationCompatibilityDetector : IInstallationCom
         return $"{parsed.Major}.{parsed.Minor}";
     }
 
-    [GeneratedRegex(@"(?im)^\s*LoadModule\s+(?<module>php\w*_module)\s+[\"'](?<path>[^\"']*php[^\"']*apache2_4\.dll)[\"']")]
+    [GeneratedRegex("(?im)^\\s*LoadModule\\s+(?<module>php\\w*_module)\\s+[\\\"'](?<path>[^\\\"']*php[^\\\"']*apache2_4\\.dll)[\\\"']")]
     private static partial Regex PhpLoadModuleRegex();
 }
