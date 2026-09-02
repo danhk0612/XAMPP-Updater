@@ -61,7 +61,8 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
 
         var php = installation.Components.First(item => item.Type == XamppComponentType.Php);
         var currentVersion = php.Version ?? "Unknown";
-        var currentIni = Path.Combine(installation.RootPath, "php", "php.ini");
+        var finalPhpRoot = Path.Combine(installation.RootPath, "php");
+        var currentIni = Path.Combine(finalPhpRoot, "php.ini");
         if (!File.Exists(currentIni))
         {
             throw new FileNotFoundException("현재 php.ini를 찾을 수 없습니다.", currentIni);
@@ -100,7 +101,9 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
                 throw new InvalidOperationException("PHP 설정 마이그레이션 제안안을 만들지 못했습니다.");
             }
 
-            var proposedIni = File.ReadAllText(migration.IniPath);
+            // 검토용 스테이징 경로는 검토 종료 시 삭제된다. 사용자가 확정하는 php.ini와
+            // 검토 메시지에는 실제 업데이트 완료 후의 XAMPP PHP 경로만 노출/저장한다.
+            var proposedIni = NormalizeReviewPath(File.ReadAllText(migration.IniPath), phpRoot, finalPhpRoot);
             var items = BuildPreservedItems(File.ReadAllText(currentIni), proposedIni);
 
             foreach (var dll in extensionResult.InstalledDlls)
@@ -112,16 +115,18 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
 
             foreach (var warning in extensionResult.Warnings)
             {
+                var normalizedWarning = NormalizeReviewPath(warning, phpRoot, finalPhpRoot);
                 items.Add(new PhpMigrationReviewItem(
-                    IsExtensionWarningReviewRequired(warning) ? PhpMigrationReviewKind.NeedsReview : PhpMigrationReviewKind.AutomaticChange,
-                    warning));
+                    IsExtensionWarningReviewRequired(normalizedWarning) ? PhpMigrationReviewKind.NeedsReview : PhpMigrationReviewKind.AutomaticChange,
+                    normalizedWarning));
             }
 
             foreach (var warning in migration.Warnings)
             {
+                var normalizedWarning = NormalizeReviewPath(warning, phpRoot, finalPhpRoot);
                 items.Add(new PhpMigrationReviewItem(
-                    IsMigrationWarningReviewRequired(warning) ? PhpMigrationReviewKind.NeedsReview : PhpMigrationReviewKind.AutomaticChange,
-                    warning));
+                    IsMigrationWarningReviewRequired(normalizedWarning) ? PhpMigrationReviewKind.NeedsReview : PhpMigrationReviewKind.AutomaticChange,
+                    normalizedWarning));
             }
 
             return new PhpMigrationReviewResult(
@@ -135,6 +140,12 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         {
             TryDeleteDirectory(reviewRoot);
         }
+    }
+
+    private static string NormalizeReviewPath(string text, string reviewPhpRoot, string finalPhpRoot)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+        return text.Replace(reviewPhpRoot, finalPhpRoot, StringComparison.OrdinalIgnoreCase);
     }
 
     private static List<PhpMigrationReviewItem> BuildPreservedItems(string currentIni, string proposedIni)
