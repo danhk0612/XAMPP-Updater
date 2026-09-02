@@ -49,6 +49,18 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
             {
                 var rawValue = browscap.Groups["value"].Value.Trim().Trim('"', '\'');
                 var migratedBrowscap = ResolveMigratedPath(rawValue, oldPhpRoot, newPhpRoot);
+                if (migratedBrowscap is not null && !File.Exists(migratedBrowscap))
+                {
+                    var sourceBrowscap = ResolveExistingSourcePath(rawValue, oldPhpRoot);
+                    if (sourceBrowscap is not null && IsPathInsideRoot(sourceBrowscap, oldPhpRoot) && IsPathInsideRoot(migratedBrowscap, newPhpRoot))
+                    {
+                        var destinationDirectory = Path.GetDirectoryName(migratedBrowscap);
+                        if (!string.IsNullOrWhiteSpace(destinationDirectory)) Directory.CreateDirectory(destinationDirectory);
+                        File.Copy(sourceBrowscap, migratedBrowscap, overwrite: true);
+                        warnings.Add($"browscap 파일 자동 보존: {sourceBrowscap} → {migratedBrowscap}");
+                    }
+                }
+
                 if (migratedBrowscap is not null && File.Exists(migratedBrowscap))
                 {
                     migrated.Add($"browscap=\"{migratedBrowscap}\"");
@@ -148,7 +160,8 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
             }
         }
 
-        return fileName.Trim().Replace('-', '_');
+        var normalized = fileName.Trim().Replace('-', '_');
+        return normalized.Equals("gd2", StringComparison.OrdinalIgnoreCase) ? "gd" : normalized;
     }
 
     internal static string? ResolveExtensionDll(string configuredName, IReadOnlySet<string> availableDlls)
@@ -193,6 +206,36 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         catch
         {
             return null;
+        }
+    }
+
+    private static string? ResolveExistingSourcePath(string configuredPath, string oldPhpRoot)
+    {
+        try
+        {
+            var candidate = Path.IsPathFullyQualified(configuredPath)
+                ? Path.GetFullPath(configuredPath)
+                : Path.GetFullPath(Path.Combine(oldPhpRoot, configuredPath));
+            return File.Exists(candidate) ? candidate : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static bool IsPathInsideRoot(string path, string root)
+    {
+        try
+        {
+            var fullPath = Path.GetFullPath(path);
+            var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            return fullPath.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) ||
+                   fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
         }
     }
 
