@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -10,14 +11,28 @@ namespace XamppUpdater.App;
 public partial class MainWindow
 {
     private readonly IApacheUpdateExecutor _apacheUpdateExecutor = new ApacheUpdateExecutor();
+    private readonly IApacheMigrationReviewService _apacheMigrationReviewService = new ApacheMigrationReviewService();
     private Button? _apacheExecuteButton;
+    private Button? _apacheReviewButton;
     private Button? _apacheLogButton;
     private bool _apacheUpdateRunning;
+    private bool _apacheReviewRunning;
 
     private void InitializeApachePhase4Ui()
     {
         if (_apacheExecuteButton is not null) return;
         if (ApacheDiffButton.Parent is not StackPanel actionPanel) return;
+
+        _apacheReviewButton = new Button
+        {
+            Content = "마이그레이션 검토",
+            Margin = new Thickness(8, 0, 0, 0),
+            Padding = new Thickness(12, 5, 12, 5),
+            IsEnabled = false,
+            ToolTip = "새 Apache 바이너리로 현재 conf와 참조 모듈을 실제 교체 전에 사전 검증합니다."
+        };
+        _apacheReviewButton.Click += ApacheReviewButton_Click;
+        actionPanel.Children.Add(_apacheReviewButton);
 
         _apacheExecuteButton = new Button
         {
@@ -25,7 +40,7 @@ public partial class MainWindow
             Margin = new Thickness(8, 0, 0, 0),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
-            ToolTip = "준비된 패키지와 롤백 백업으로 Apache를 실제 교체하고 실패 시 자동 롤백합니다."
+            ToolTip = "사전 설정 검증 후 준비된 패키지와 롤백 백업으로 Apache를 실제 교체하고 실패 시 자동 롤백합니다."
         };
         _apacheExecuteButton.Click += ApacheExecuteButton_Click;
         actionPanel.Children.Add(_apacheExecuteButton);
@@ -59,15 +74,21 @@ public partial class MainWindow
 
     private void RefreshApacheExecuteEnabled()
     {
-        if (_apacheExecuteButton is null || _apacheUpdateRunning || _lastInstallation is null)
+        if (_apacheExecuteButton is null || _lastInstallation is null)
         {
             if (_apacheExecuteButton is not null) _apacheExecuteButton.IsEnabled = false;
+            if (_apacheReviewButton is not null) _apacheReviewButton.IsEnabled = false;
             return;
         }
 
-        if (ApacheTargetComboBox.SelectedItem is not UpdateTargetOption target ||
-            !_packageResults.TryGetValue(XamppComponentType.Apache, out var package) ||
-            !string.Equals(package.Version, target.Version, StringComparison.OrdinalIgnoreCase))
+        var packageReady = ApacheTargetComboBox.SelectedItem is UpdateTargetOption target &&
+                           _packageResults.TryGetValue(XamppComponentType.Apache, out var package) &&
+                           string.Equals(package.Version, target.Version, StringComparison.OrdinalIgnoreCase);
+
+        if (_apacheReviewButton is not null)
+            _apacheReviewButton.IsEnabled = packageReady && !_apacheUpdateRunning && !_apacheReviewRunning;
+
+        if (_apacheUpdateRunning || _apacheReviewRunning || !packageReady)
         {
             _apacheExecuteButton.IsEnabled = false;
             return;
@@ -84,12 +105,57 @@ public partial class MainWindow
             _lastInstallation.RootPath,
             XamppComponentType.Apache,
             current,
-            target.Version) is not null;
+            target!.Version) is not null;
+    }
+
+    private async void ApacheReviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_apacheReviewRunning || _apacheUpdateRunning || _lastInstallation is null ||
+            ApacheTargetComboBox.SelectedItem is not UpdateTargetOption target ||
+            !_packageResults.TryGetValue(XamppComponentType.Apache, out var package))
+            return;
+
+        _apacheReviewRunning = true;
+        RefreshApacheExecuteEnabled();
+        SetBusy(true, $"Apache {target.Version} 설정 사전 검증 중...");
+
+        try
+        {
+            var installation = _lastInstallation;
+            var review = await Task.Run(async () =>
+                await _apacheMigrationReviewService.BuildAsync(installation, target, package));
+
+            var confRoot = Path.Combine(installation.RootPath, "apache", "conf");
+            new ApacheMigrationReviewWindow(review, confRoot) { Owner = this }.ShowDialog();
+
+            if (review.SyntaxValid)
+            {
+                AppendDetail(XamppComponentType.Apache,
+                    $"Apache {target.Version} 설정 사전 검증 통과: conf {review.ConfigurationFiles.Count}개 / 자동 처리 {review.AutomaticChangeCount}");
+                StatusText.Text = $"Apache {target.Version} 설정 사전 검증 통과";
+            }
+            else
+            {
+                AppendDetail(XamppComponentType.Apache, "Apache 설정 사전 검증 실패: " + review.ValidationOutput);
+                StatusText.Text = $"Apache {target.Version} 설정 사전 검증 실패";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "Apache 설정 사전 검증 실패: " + ex.Message;
+            MessageBox.Show(this, ex.Message, "Apache 설정 마이그레이션", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            _apacheReviewRunning = false;
+            SetBusy(false);
+            RefreshApacheExecuteEnabled();
+        }
     }
 
     private async void ApacheExecuteButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_apacheUpdateRunning || _lastInstallation is null ||
+        if (_apacheUpdateRunning || _apacheReviewRunning || _lastInstallation is null ||
             ApacheTargetComboBox.SelectedItem is not UpdateTargetOption target ||
             !_packageResults.TryGetValue(XamppComponentType.Apache, out var package))
             return;
@@ -114,11 +180,39 @@ public partial class MainWindow
             return;
         }
 
+        SetBusy(true, $"Apache {target.Version} 설정 최종 사전 검증 중...");
+        ApacheMigrationReviewResult precheck;
+        try
+        {
+            precheck = await Task.Run(async () =>
+                await _apacheMigrationReviewService.BuildAsync(installation, target, package));
+        }
+        catch (Exception ex)
+        {
+            SetBusy(false);
+            MessageBox.Show(this, "Apache 설정 사전 검증 실행에 실패했습니다.\n\n" + ex.Message,
+                "Apache 업데이트", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        SetBusy(false);
+
+        if (!precheck.SyntaxValid)
+        {
+            new ApacheMigrationReviewWindow(precheck, Path.Combine(installation.RootPath, "apache", "conf")) { Owner = this }.ShowDialog();
+            MessageBox.Show(this,
+                "현재 Apache 설정이 대상 버전의 사전 검증을 통과하지 못했습니다. 실제 업데이트는 실행하지 않습니다.",
+                "Apache 업데이트",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
         var confirmation = MessageBox.Show(
             this,
             $"Apache를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
-            "현재 conf 설정을 보존하고, 새 패키지에 없는 참조 모듈은 기존 설치에서 보존한 뒤 httpd -t와 서비스 기동을 검증합니다. " +
-            "검증 실패 시 기존 Apache로 자동 롤백합니다. 계속하시겠습니까?",
+            "대상 Apache 바이너리로 현재 설정의 httpd -t 사전 검증을 통과했습니다. " +
+            "현재 conf 설정을 보존하고, 새 패키지에 없는 참조 모듈은 필요한 경우 기존 설치에서 보존합니다. " +
+            "실제 교체 후에도 다시 검증하며 실패 시 기존 Apache로 자동 롤백합니다. 계속하시겠습니까?",
             "Apache 업데이트 실행",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning,
@@ -137,6 +231,7 @@ public partial class MainWindow
         RefreshApacheExecuteEnabled();
         SetBusy(true, $"Apache {current} → {target.Version} 업데이트 준비 중...");
         Log($"실행 시작: Apache {current} → {target.Version}");
+        Log($"사전 검증: httpd -t 통과 / 설정 파일 {precheck.ConfigurationFiles.Count}개");
         Log($"XAMPP 경로: {installation.RootPath}");
         Log($"패키지: {package.PackagePath}");
         Log($"롤백 manifest: {backup.ManifestPath}");
