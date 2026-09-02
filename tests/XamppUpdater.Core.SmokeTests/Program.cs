@@ -72,6 +72,30 @@ var mariaDbOnline = new OnlineComponentVersion(
 var mariaDbCompatibility = CompatibilityEvaluator.Evaluate(XamppComponentType.MariaDb, "10.4.8", mariaDbOnline, compatibilityProfile);
 AssertContains("MariaDB patch compatibility", mariaDbCompatibility, "패치 업데이트 후보");
 
+var apacheCandidate = CandidatePackageCatalogService.ParseApacheLoungeCandidate(
+    "<a href=\"VS18/binaries/httpd-2.4.68-260827-Win64-VS18.zip\">httpd-2.4.68-260827-Win64-VS18.zip</a>",
+    BinaryArchitecture.X64,
+    "2.4.41");
+AssertEqual("Apache candidate version", "2.4.68", apacheCandidate.Version);
+AssertEqual("Apache candidate compiler", "VS18", apacheCandidate.Compiler);
+AssertEqual("Apache candidate status", CandidateCompatibilityStatus.Conditional.ToString(), apacheCandidate.Status.ToString());
+
+var phpCandidate = CandidatePackageCatalogService.ParsePhpArchiveCandidate(
+    "php-7.3.32-Win32-VC15-x64.zip php-7.3.33-nts-Win32-VC15-x64.zip php-7.3.33-Win32-VC15-x64.zip",
+    "7.3.11",
+    compatibilityProfile);
+AssertEqual("PHP candidate version", "7.3.33", phpCandidate.Version);
+AssertEqual("PHP candidate compiler", "VC15", phpCandidate.Compiler);
+AssertEqual("PHP candidate TS", "True", phpCandidate.ThreadSafe?.ToString());
+AssertEqual("PHP candidate status", CandidateCompatibilityStatus.Blocked.ToString(), phpCandidate.Status.ToString());
+
+var mariaDbCandidate = CandidatePackageCatalogService.ParseMariaDbSeriesCandidate(
+    "Community Server 10.4.32 Community Server 10.4.33 Community Server 10.4.34",
+    "10.4.8",
+    BinaryArchitecture.X64);
+AssertEqual("MariaDB candidate version", "10.4.34", mariaDbCandidate.Version);
+AssertEqual("MariaDB candidate status", CandidateCompatibilityStatus.Conditional.ToString(), mariaDbCandidate.Status.ToString());
+
 CheckServiceImagePath(
     "\"C:\\xampp\\mysql\\bin\\mysqld.exe\" --defaults-file=\"C:\\xampp\\mysql\\bin\\my.ini\" mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
