@@ -20,7 +20,8 @@ public sealed record ApacheMigrationReviewResult(
     bool SyntaxValid,
     string ValidationOutput,
     IReadOnlyList<ApacheMigrationReviewItem> Items,
-    IReadOnlyList<string> ConfigurationFiles)
+    IReadOnlyList<string> ConfigurationFiles,
+    IReadOnlyDictionary<string, string> ProposedFiles)
 {
     public int PreservedCount => Items.Count(item => item.Kind == ApacheMigrationReviewKind.Preserved);
     public int AutomaticChangeCount => Items.Count(item => item.Kind == ApacheMigrationReviewKind.AutomaticChange);
@@ -38,6 +39,13 @@ public interface IApacheMigrationReviewService
 
 public sealed partial class ApacheMigrationReviewService : IApacheMigrationReviewService
 {
+    private readonly IApacheMigrationOverrideStore _overrideStore;
+
+    public ApacheMigrationReviewService(IApacheMigrationOverrideStore? overrideStore = null)
+    {
+        _overrideStore = overrideStore ?? new ApacheMigrationOverrideStore();
+    }
+
     public async Task<ApacheMigrationReviewResult> BuildAsync(
         XamppInstallation installation,
         UpdateTargetOption target,
@@ -71,12 +79,22 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             if (Directory.Exists(stagedConf)) Directory.Delete(stagedConf, recursive: true);
             CopyDirectory(currentConf, stagedConf);
 
-            var configFiles = Directory.EnumerateFiles(stagedConf, "*.conf", SearchOption.AllDirectories)
-                .Select(path => Path.GetRelativePath(stagedRoot, path).Replace('\\', '/'))
+            var items = new List<ApacheMigrationReviewItem>();
+            var saved = _overrideStore.TryLoad(installation.RootPath, target.Version, currentConf);
+            if (saved is not null)
+            {
+                ApplyFiles(stagedConf, saved.Files);
+                items.Add(new ApacheMigrationReviewItem(
+                    ApacheMigrationReviewKind.AutomaticChange,
+                    $"사용자가 확정한 Apache 설정 적용안 사용: {saved.ConfirmedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}"));
+            }
+
+            var proposedFiles = ReadFiles(stagedConf);
+            var configFiles = proposedFiles.Keys
+                .Select(path => "conf/" + path.Replace('\\', '/'))
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            var items = new List<ApacheMigrationReviewItem>();
             foreach (var config in configFiles)
                 items.Add(new ApacheMigrationReviewItem(ApacheMigrationReviewKind.Preserved, config));
 
@@ -100,18 +118,11 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
                               !validation.Output.Contains("Syntax error", StringComparison.OrdinalIgnoreCase) &&
                               !validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase);
 
-            if (syntaxValid)
-            {
-                items.Add(new ApacheMigrationReviewItem(
-                    ApacheMigrationReviewKind.AutomaticChange,
-                    $"Apache {target.Version} 바이너리로 기존 설정 사전 검증 통과: httpd -t"));
-            }
-            else
-            {
-                items.Add(new ApacheMigrationReviewItem(
-                    ApacheMigrationReviewKind.NeedsReview,
-                    "새 Apache에서 기존 설정 사전 검증 실패: " + Compact(validation.Output)));
-            }
+            items.Add(new ApacheMigrationReviewItem(
+                syntaxValid ? ApacheMigrationReviewKind.AutomaticChange : ApacheMigrationReviewKind.NeedsReview,
+                syntaxValid
+                    ? $"Apache {target.Version} 바이너리로 기존 설정 사전 검증 통과: httpd -t"
+                    : "새 Apache에서 기존 설정 사전 검증 실패: " + Compact(validation.Output)));
 
             return new ApacheMigrationReviewResult(
                 currentVersion,
@@ -119,11 +130,33 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
                 syntaxValid,
                 validation.Output,
                 items,
-                configFiles);
+                configFiles,
+                proposedFiles);
         }
         finally
         {
             TryDeleteDirectory(reviewRoot);
+        }
+    }
+
+    private static Dictionary<string, string> ReadFiles(string confRoot)
+    {
+        return Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories)
+            .ToDictionary(
+                path => Path.GetRelativePath(confRoot, path).Replace('\\', '/'),
+                File.ReadAllText,
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static void ApplyFiles(string confRoot, IReadOnlyDictionary<string, string> files)
+    {
+        foreach (var pair in files)
+        {
+            var relative = pair.Key.Replace('/', Path.DirectorySeparatorChar);
+            var destination = Path.GetFullPath(Path.Combine(confRoot, relative));
+            if (!IsUnderRoot(destination, confRoot)) continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.WriteAllText(destination, pair.Value);
         }
     }
 
@@ -136,22 +169,17 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         return Directory.GetParent(bin)?.FullName ?? throw new InvalidDataException("Apache 패키지 루트를 확인할 수 없습니다.");
     }
 
-    private static void RewriteServerRootForValidation(
-        string mainConf,
-        string stagedRoot,
-        ICollection<ApacheMigrationReviewItem> items)
+    private static void RewriteServerRootForValidation(string mainConf, string stagedRoot, ICollection<ApacheMigrationReviewItem> items)
     {
         var original = File.ReadAllText(mainConf);
         var apachePath = stagedRoot.Replace('\\', '/');
         var updated = DefineSrvRootRegex().Replace(original, $"Define SRVROOT \"{apachePath}\"");
         if (string.Equals(original, updated, StringComparison.Ordinal))
             updated = ServerRootRegex().Replace(original, $"ServerRoot \"{apachePath}\"");
-
         if (!string.Equals(original, updated, StringComparison.Ordinal))
         {
             File.WriteAllText(mainConf, updated);
-            items.Add(new ApacheMigrationReviewItem(
-                ApacheMigrationReviewKind.AutomaticChange,
+            items.Add(new ApacheMigrationReviewItem(ApacheMigrationReviewKind.AutomaticChange,
                 "검토용 ServerRoot만 임시 Apache 경로로 변경하여 사전 검증"));
         }
     }
@@ -167,12 +195,10 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
                 if (!match.Success) continue;
                 var configured = match.Groups["path"].Value.Trim().Trim('"', '\'').Replace('/', Path.DirectorySeparatorChar);
                 if (Path.IsPathFullyQualified(configured)) continue;
-
                 var destination = Path.GetFullPath(Path.Combine(stagedRoot, configured));
                 if (File.Exists(destination)) continue;
                 var source = Path.GetFullPath(Path.Combine(currentRoot, configured));
                 if (!File.Exists(source) || !IsUnderRoot(source, currentRoot) || !IsUnderRoot(destination, stagedRoot)) continue;
-
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 File.Copy(source, destination, overwrite: true);
                 result.Add(Path.GetRelativePath(stagedRoot, destination).Replace('\\', '/'));
@@ -194,22 +220,10 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         }
     }
 
-    private static async Task<ProcessResult> RunAsync(
-        string executable,
-        IReadOnlyList<string> arguments,
-        string workingDirectory,
-        CancellationToken cancellationToken)
+    private static async Task<ProcessResult> RunAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
     {
         if (!File.Exists(executable)) throw new FileNotFoundException("httpd.exe를 찾을 수 없습니다.", executable);
-        var start = new ProcessStartInfo
-        {
-            FileName = executable,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true,
-            WorkingDirectory = workingDirectory
-        };
+        var start = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = workingDirectory };
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         process.Start();
@@ -227,21 +241,14 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void TryDeleteDirectory(string path)
-    {
-        if (!Directory.Exists(path)) return;
-        try { Directory.Delete(path, recursive: true); } catch { }
-    }
-
+    private static void TryDeleteDirectory(string path) { if (Directory.Exists(path)) try { Directory.Delete(path, recursive: true); } catch { } }
     private static string Compact(string value) => value.Replace("\r", " ").Replace("\n", " ").Trim();
     private sealed record ProcessResult(int ExitCode, string Output);
 
     [GeneratedRegex(@"(?im)^\s*Define\s+SRVROOT\s+[^\r\n]+$")]
     private static partial Regex DefineSrvRootRegex();
-
     [GeneratedRegex(@"(?im)^\s*ServerRoot\s+[^\r\n]+$")]
     private static partial Regex ServerRootRegex();
-
     [GeneratedRegex(@"^\s*LoadModule\s+\S+\s+(?<path>[^#]+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex LoadModuleRegex();
 }
