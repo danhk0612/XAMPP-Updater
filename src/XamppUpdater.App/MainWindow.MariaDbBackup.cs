@@ -16,6 +16,7 @@ public partial class MainWindow
         MariaDbBackupButton.Click -= BackupButton_Click;
         MariaDbBackupButton.Click += MariaDbSafeBackupButton_Click;
         InitializePhase4Ui();
+        InitializePhpMigrationReviewUi();
     }
 
     private async void MariaDbSafeBackupButton_Click(object sender, RoutedEventArgs e)
