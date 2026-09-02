@@ -60,14 +60,20 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] 설치 환경과 XAMPP 공식 버전을 비교한 1차 호환성 판정
 - [x] PHP 메이저 변경 자동 적용 보류
 - [x] MariaDB 다른 major.minor 계열 직접 교체 금지
+- [x] 실제 Windows 11 환경에서 로컬 호환성 프로파일 검증
 
 후보 패키지 판정:
 
-- [ ] Apache Windows 바이너리 공급원 확정 및 다운로드 파일 메타데이터 추출
-- [ ] Apache 후보 패키지의 VC 런타임/모듈 ABI 판정
-- [ ] PHP 후보 ZIP의 x64 / Thread Safe / compiler / extension ABI 판정
-- [ ] MariaDB x64 ZIP 패키지와 공식 업그레이드 경로 판정
-- [ ] 호환 / 조건부 호환 / 비호환 상태를 후보 패키지 단위로 모델링
+- [x] Apache Lounge Windows ZIP 후보 탐색 및 version/arch/compiler 메타데이터 추출
+- [x] PHP Windows archive에서 현재 major.minor / arch / TS / compiler 일치 패치 후보 탐색
+- [x] MariaDB 공식 다운로드에서 현재 major.minor 계열 최신 winx64 후보 탐색
+- [x] 호환 / 조건부 / 차단 / 후보 없음 상태를 패키지 단위로 모델링
+- [x] 검증 해시를 확보하지 못한 PHP archive 후보 자동 적용 차단
+- [x] GUI에서 실제 후보 버전과 판정 상태 표시
+- [ ] Apache 후보 ZIP 내부 모듈/의존 DLL 기준 ABI 세부 검증
+- [ ] PHP 후보 ZIP의 Extension Build / Apache SAPI DLL을 실제 압축 내용 기준으로 검증
+- [ ] MariaDB SHA256 manifest 실제 값 확보 및 ZIP 해시와 연결
+- [ ] MariaDB `mariadb-upgrade` 실행 조건/절차 확정
 
 ### 2C — 선택 가능한 버전 카탈로그
 
