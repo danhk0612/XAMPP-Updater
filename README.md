@@ -20,7 +20,7 @@ Phase 2 — Version Catalog & Compatibility 진행 중입니다.
 - Apache 설정의 PHP `LoadModule` 연동 방식 감지
 - 현재 환경과 XAMPP 공식 버전의 1차 호환성 판정
 
-아직 다운로드, 서비스 제어, 파일 교체, 설정 변경은 실행하지 않습니다.
+Phase 2는 **읽기 전용**입니다. 아직 서비스 제어, 패키지 설치, 파일 교체, 설정 변경을 실행하지 않습니다.
 
 ## 빌드
 
