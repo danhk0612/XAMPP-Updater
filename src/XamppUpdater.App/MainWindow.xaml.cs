@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitializeMariaDbSafeBackupUi();
         Loaded += async (_, _) => await AutoDetectAsync();
     }
 
@@ -85,11 +86,22 @@ public partial class MainWindow : Window
             var report = await Task.Run(() => _preflightService.Inspect(_lastInstallation, type, target.Version));
             _preflightReports[type] = report;
             SetPreflightText(type, FormatPreflight(report));
-            SetBackupEnabled(type, CanCreateBackup(report));
-            if (!CanCreateBackup(report) && type == XamppComponentType.MariaDb)
+
+            var canBackup = type == XamppComponentType.MariaDb
+                ? CanRunMariaDbSafeBackup(report)
+                : CanCreateBackup(report);
+            SetBackupEnabled(type, canBackup);
+
+            if (!canBackup && type == XamppComponentType.MariaDb)
             {
-                AppendDetail(type, "백업 생성: MariaDB 물리 백업은 서비스 중지 후 실행합니다.");
+                AppendDetail(type, "백업 생성: 실행 중인 MariaDB를 안전하게 중지할 수 있는 Windows 서비스를 찾지 못했습니다.");
             }
+            else if (type == XamppComponentType.MariaDb &&
+                     (report.ProcessRunning || report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true))
+            {
+                AppendDetail(type, "백업 생성: 논리 백업 후 MariaDB 서비스를 자동 중지하고 물리 백업한 뒤 원래 상태로 복구합니다.");
+            }
+
             StatusText.Text = $"{type} 준비 점검 완료: {report.CurrentVersion} → {report.TargetVersion}";
         }
         catch (Exception ex)
