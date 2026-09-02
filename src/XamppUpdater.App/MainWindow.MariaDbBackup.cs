@@ -9,6 +9,7 @@ public partial class MainWindow
 {
     private readonly IMariaDbLogicalBackupService _mariaDbLogicalBackupService = new MariaDbLogicalBackupService();
     private readonly IWindowsServiceController _windowsServiceController = new WindowsServiceController();
+    private bool _mariaDbBackupRunning;
 
     private void InitializeMariaDbSafeBackupUi()
     {
@@ -18,6 +19,11 @@ public partial class MainWindow
 
     private async void MariaDbSafeBackupButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_mariaDbBackupRunning)
+        {
+            return;
+        }
+
         if (!TryGetActionTarget(sender, out var type, out var target) ||
             type != XamppComponentType.MariaDb ||
             _lastInstallation is null)
@@ -25,6 +31,7 @@ public partial class MainWindow
             return;
         }
 
+        _mariaDbBackupRunning = true;
         SetBusy(true, "MariaDB 논리/물리 롤백 백업을 생성하는 중...");
         var serviceWasRunning = false;
         var serviceStoppedByUpdater = false;
@@ -119,6 +126,7 @@ public partial class MainWindow
                 }
             }
 
+            _mariaDbBackupRunning = false;
             SetBusy(false);
             if (_preflightReports.TryGetValue(type, out var latestReport))
             {
