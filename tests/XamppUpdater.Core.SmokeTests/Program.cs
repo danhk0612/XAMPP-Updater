@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Runtime.InteropServices;
 using XamppUpdater.Core.Models;
 using XamppUpdater.Core.Services;
 
@@ -107,6 +109,8 @@ CheckServiceImagePath(
     @"C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
 
+CheckZipPeArchitecture();
+
 var root = Path.Combine(Path.GetTempPath(), $"xampp-updater-smoke-{Guid.NewGuid():N}");
 try
 {
@@ -172,6 +176,44 @@ void CheckServiceImagePath(string imagePath, string expected)
 {
     var actual = XamppInstallationDetector.ExtractExecutablePath(imagePath);
     AssertEqual("service ImagePath parser", Path.GetFullPath(expected), actual);
+}
+
+void CheckZipPeArchitecture()
+{
+    var processPath = Environment.ProcessPath;
+    if (string.IsNullOrWhiteSpace(processPath) || !File.Exists(processPath))
+    {
+        failures.Add("PE ZIP smoke test: current process executable path unavailable.");
+        return;
+    }
+
+    var expected = RuntimeInformation.ProcessArchitecture switch
+    {
+        Architecture.X86 => BinaryArchitecture.X86,
+        Architecture.X64 => BinaryArchitecture.X64,
+        Architecture.Arm64 => BinaryArchitecture.Arm64,
+        _ => BinaryArchitecture.Unknown
+    };
+
+    var zipPath = Path.Combine(Path.GetTempPath(), $"xampp-updater-pe-{Guid.NewGuid():N}.zip");
+    try
+    {
+        using (var archive = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(processPath, "php.exe", CompressionLevel.Fastest);
+        }
+
+        var inspection = PackagePreparationService.InspectArchive(
+            zipPath,
+            XamppComponentType.Php,
+            expected,
+            requirePhpApacheModule: false);
+        AssertEqual("ZIP PE architecture", expected.ToString(), inspection.Architecture.ToString());
+    }
+    finally
+    {
+        if (File.Exists(zipPath)) File.Delete(zipPath);
+    }
 }
 
 void AssertEqual(string name, string expected, string? actual)
