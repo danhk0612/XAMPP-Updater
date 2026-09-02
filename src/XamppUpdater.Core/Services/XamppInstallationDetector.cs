@@ -70,8 +70,15 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
                 continue;
             }
 
-            var result = _versionDetector.Detect(pair.Key, executablePath);
-            components.Add(new XamppComponentInfo(pair.Key, true, result.Version, executablePath, serviceName, result.Detail));
+            try
+            {
+                var result = _versionDetector.Detect(pair.Key, executablePath);
+                components.Add(new XamppComponentInfo(pair.Key, true, result.Version, executablePath, serviceName, result.Detail));
+            }
+            catch (Exception ex)
+            {
+                components.Add(new XamppComponentInfo(pair.Key, true, null, executablePath, serviceName, $"버전 확인 실패: {ex.Message}"));
+            }
         }
 
         return new XamppInstallation(normalizedRoot, discoverySource, components);

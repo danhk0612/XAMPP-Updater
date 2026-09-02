@@ -18,3 +18,5 @@ jobs:
         run: dotnet restore XamppUpdater.sln
       - name: Build
         run: dotnet build XamppUpdater.sln --configuration Release --no-restore
+      - name: Phase 1 smoke tests
+        run: dotnet run --project .\tests\XamppUpdater.Core.SmokeTests\XamppUpdater.Core.SmokeTests.csproj --configuration Release --no-build

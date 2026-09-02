@@ -28,6 +28,8 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 - [x] PHP `php.exe -v` 버전 확인
 - [x] MariaDB `mysqld.exe --version` 버전 확인
 - [x] Apache/MariaDB 실제 서비스명 표시
+- [x] 실제 MariaDB/MySQL 버전 출력 예제에 대한 parser smoke test
+- [x] 임시 XAMPP 구조를 이용한 수동 경로 검사 smoke test
 - [x] Phase 1은 읽기 전용으로 동작
 
 ### Phase 1 완료 조건
@@ -38,6 +40,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 4. Apache/PHP/MariaDB의 설치 여부와 현재 버전을 GUI에서 확인할 수 있다.
 5. 등록된 Apache/MariaDB 서비스명이 고정값이 아니라 시스템에서 감지된다.
 6. 파일 교체, 서비스 중지, 설정 변경 등 시스템 변경 작업을 하지 않는다.
+7. Windows CI에서 빌드와 Phase 1 smoke test가 통과한다.
 
 ## Phase 2 — Version Catalog & Compatibility
 

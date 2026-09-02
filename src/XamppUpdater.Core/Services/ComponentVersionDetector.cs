@@ -22,13 +22,7 @@ public sealed partial class ComponentVersionDetector : IComponentVersionDetector
         };
 
         var output = Run(executablePath, arguments);
-        var version = type switch
-        {
-            XamppComponentType.Apache => MatchVersion(ApacheVersionRegex(), output),
-            XamppComponentType.Php => MatchVersion(PhpVersionRegex(), output),
-            XamppComponentType.MariaDb => MatchVersion(MariaDbVersionRegex(), output),
-            _ => null
-        };
+        var version = ParseVersion(type, output);
 
         string? detail = null;
         if (type == XamppComponentType.MariaDb && !output.Contains("MariaDB", StringComparison.OrdinalIgnoreCase))
@@ -37,6 +31,34 @@ public sealed partial class ComponentVersionDetector : IComponentVersionDetector
         }
 
         return new ComponentVersionResult(version, output.Trim(), detail);
+    }
+
+    internal static string? ParseVersion(XamppComponentType type, string output)
+    {
+        return type switch
+        {
+            XamppComponentType.Apache => MatchVersion(ApacheVersionRegex(), output),
+            XamppComponentType.Php => MatchVersion(PhpVersionRegex(), output),
+            XamppComponentType.MariaDb => ParseMariaDbVersion(output),
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+        };
+    }
+
+    private static string? ParseMariaDbVersion(string output)
+    {
+        var version = MatchVersion(MariaDbDistribVersionRegex(), output);
+        if (version is not null)
+        {
+            return version;
+        }
+
+        version = MatchVersion(MariaDbTaggedVersionRegex(), output);
+        if (version is not null)
+        {
+            return version;
+        }
+
+        return MatchVersion(GenericServerVersionRegex(), output);
     }
 
     private static string Run(string fileName, string arguments)
@@ -82,6 +104,12 @@ public sealed partial class ComponentVersionDetector : IComponentVersionDetector
     [GeneratedRegex(@"PHP\s+(?<version>\d+\.\d+\.\d+(?:[-+A-Za-z0-9.]*)?)", RegexOptions.IgnoreCase)]
     private static partial Regex PhpVersionRegex();
 
-    [GeneratedRegex(@"Ver\s+(?<version>\d+\.\d+\.\d+)", RegexOptions.IgnoreCase)]
-    private static partial Regex MariaDbVersionRegex();
+    [GeneratedRegex(@"Distrib\s+(?<version>\d+\.\d+\.\d+)", RegexOptions.IgnoreCase)]
+    private static partial Regex MariaDbDistribVersionRegex();
+
+    [GeneratedRegex(@"(?<version>\d+\.\d+\.\d+)-MariaDB", RegexOptions.IgnoreCase)]
+    private static partial Regex MariaDbTaggedVersionRegex();
+
+    [GeneratedRegex(@"Ver\s+(?<version>\d+\.\d+(?:\.\d+)?)", RegexOptions.IgnoreCase)]
+    private static partial Regex GenericServerVersionRegex();
 }
