@@ -16,7 +16,7 @@ public sealed record UpdateTargetOption(
     string? PackageFileName = null,
     bool IsEol = false)
 {
-    public string DisplayText => $"{Version} — {Label}{(IsEol ? " [EOL]" : string.Empty)}{(PackageResolved ? string.Empty : " (패키지 확인 필요)")}";
+    public string DisplayText => $"{Version} — {Label}{(IsEol ? " [EOL]" : string.Empty)}";
 }
 
 public enum UpdateTargetSource
