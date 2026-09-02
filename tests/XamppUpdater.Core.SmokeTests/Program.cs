@@ -8,6 +8,26 @@ CheckVersion(XamppComponentType.Php, "PHP 8.4.12 (cli) (built: Aug 26 2026 10:00
 CheckVersion(XamppComponentType.MariaDb, "mysqld  Ver 15.1 Distrib 10.4.32-MariaDB, for Win64 (AMD64)", "10.4.32");
 CheckVersion(XamppComponentType.MariaDb, "mariadbd  Ver 11.8.3-MariaDB for Win64 on AMD64", "11.8.3");
 
+AssertEqual(
+    "Apache online parser",
+    "2.4.68",
+    OnlineVersionCatalogService.ParseApacheLatest("<h1>Apache HTTP Server 2.4.68 (httpd)</h1>"));
+AssertEqual(
+    "PHP online parser",
+    "8.5.10",
+    OnlineVersionCatalogService.ParsePhpLatest("<h3>PHP 8.5 (8.5.10)</h3><h3>PHP 8.4 (8.4.17)</h3>"));
+AssertEqual(
+    "MariaDB online parser",
+    "12.3.3",
+    OnlineVersionCatalogService.ParseMariaDbLatest("<h3>Latest GA Versions</h3><div>MariaDB Community Server 12.3.3</div>"));
+
+var bundle = OnlineVersionCatalogService.ParseXamppLatestBundle(
+    "<div>XAMPP for Windows 8.0.30</div><div>XAMPP for Windows 8.2.12</div>" +
+    "<div>Includes: Apache 2.4.58, MariaDB 10.4.32, PHP 8.2.12</div>");
+AssertEqual("XAMPP Apache parser", "2.4.58", bundle.Apache);
+AssertEqual("XAMPP PHP parser", "8.2.12", bundle.Php);
+AssertEqual("XAMPP MariaDB parser", "10.4.32", bundle.MariaDb);
+
 CheckServiceImagePath(
     "\"C:\\xampp\\mysql\\bin\\mysqld.exe\" --defaults-file=\"C:\\xampp\\mysql\\bin\\my.ini\" mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
@@ -67,7 +87,7 @@ if (failures.Count > 0)
     return 1;
 }
 
-Console.WriteLine("All Phase 1 smoke tests passed.");
+Console.WriteLine("All smoke tests passed.");
 return 0;
 
 void CheckVersion(XamppComponentType type, string output, string expected)
