@@ -8,6 +8,13 @@ CheckVersion(XamppComponentType.Php, "PHP 8.4.12 (cli) (built: Aug 26 2026 10:00
 CheckVersion(XamppComponentType.MariaDb, "mysqld  Ver 15.1 Distrib 10.4.32-MariaDB, for Win64 (AMD64)", "10.4.32");
 CheckVersion(XamppComponentType.MariaDb, "mariadbd  Ver 11.8.3-MariaDB for Win64 on AMD64", "11.8.3");
 
+CheckServiceImagePath(
+    @"\"C:\xampp\mysql\bin\mysqld.exe\" --defaults-file=\"C:\xampp\mysql\bin\my.ini\" mysql",
+    @"C:\xampp\mysql\bin\mysqld.exe");
+CheckServiceImagePath(
+    @"C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini mysql",
+    @"C:\xampp\mysql\bin\mysqld.exe");
+
 var root = Path.Combine(Path.GetTempPath(), $"xampp-updater-smoke-{Guid.NewGuid():N}");
 try
 {
@@ -23,6 +30,10 @@ try
         Directory.CreateDirectory(Path.GetDirectoryName(executable)!);
         File.WriteAllBytes(executable, Array.Empty<byte>());
     }
+
+    CheckServiceImagePath(
+        $"{Path.Combine(root, "mysql", "bin", "mysqld")} --defaults-file={Path.Combine(root, "mysql", "bin", "my.ini")} mysql",
+        Path.Combine(root, "mysql", "bin", "mysqld.exe"));
 
     var detector = new XamppInstallationDetector(new FakeVersionDetector());
     var installation = detector.Inspect(root, "SmokeTest");
@@ -65,9 +76,15 @@ void CheckVersion(XamppComponentType type, string output, string expected)
     AssertEqual($"{type} version parser", expected, actual);
 }
 
+void CheckServiceImagePath(string imagePath, string expected)
+{
+    var actual = XamppInstallationDetector.ExtractExecutablePath(imagePath);
+    AssertEqual("service ImagePath parser", Path.GetFullPath(expected), actual);
+}
+
 void AssertEqual(string name, string expected, string? actual)
 {
-    if (!string.Equals(expected, actual, StringComparison.Ordinal))
+    if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
     {
         failures.Add($"{name}: expected '{expected}', actual '{actual ?? "<null>"}'.");
     }
