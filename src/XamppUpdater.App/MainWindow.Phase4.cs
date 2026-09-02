@@ -12,7 +12,9 @@ public partial class MainWindow
     private readonly IBackupLocatorService _backupLocator = new BackupLocatorService();
     private readonly IPhpUpdateExecutor _phpUpdateExecutor = new PhpUpdateExecutor();
     private readonly IVisualCppRuntimeInstaller _vcRuntimeInstaller = new VisualCppRuntimeInstaller();
+    private readonly IExecutionLogService _executionLogService = new ExecutionLogService();
     private Button? _phpExecuteButton;
+    private Button? _phpLogButton;
     private bool _phpUpdateRunning;
 
     private void InitializePhase4Ui()
@@ -38,9 +40,32 @@ public partial class MainWindow
         _phpExecuteButton.Click += PhpExecuteButton_Click;
         actionPanel.Children.Add(_phpExecuteButton);
 
+        _phpLogButton = new Button
+        {
+            Content = "최근 로그 열기",
+            Margin = new Thickness(8, 0, 0, 0),
+            Padding = new Thickness(12, 5, 12, 5),
+            IsEnabled = _executionLogService.FindLatest("PHP") is not null,
+            ToolTip = "%LOCALAPPDATA%\\XamppUpdater\\Logs에 저장된 최근 PHP 업데이트 로그를 엽니다."
+        };
+        _phpLogButton.Click += PhpLogButton_Click;
+        actionPanel.Children.Add(_phpLogButton);
+
         PhpDiffButton.IsEnabledChanged += (_, _) => RefreshPhpExecuteEnabled();
         PhpBackupButton.IsEnabledChanged += (_, _) => RefreshPhpExecuteEnabled();
         PhpTargetComboBox.SelectionChanged += (_, _) => RefreshPhpExecuteEnabled();
+    }
+
+    private void PhpLogButton_Click(object sender, RoutedEventArgs e)
+    {
+        var path = _executionLogService.FindLatest("PHP");
+        if (path is null)
+        {
+            MessageBox.Show(this, "저장된 PHP 업데이트 로그가 없습니다.", "PHP 업데이트 로그", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
     }
 
     private void RefreshPhpExecuteEnabled()
@@ -120,10 +145,21 @@ public partial class MainWindow
             return;
         }
 
+        var runLog = new List<string>();
+        void Log(string text)
+        {
+            var line = $"[{DateTime.Now:HH:mm:ss}] {text}";
+            runLog.Add(line);
+            AppendDetail(XamppComponentType.Php, line);
+        }
+
         _phpUpdateRunning = true;
         RefreshPhpExecuteEnabled();
         SetBusy(true, $"PHP {current} → {target.Version} 업데이트 준비 중...");
-        AppendDetail(XamppComponentType.Php, $"실행 시작: PHP {current} → {target.Version}");
+        Log($"실행 시작: PHP {current} → {target.Version}");
+        Log($"XAMPP 경로: {installation.RootPath}");
+        Log($"패키지: {package.PackagePath}");
+        Log($"롤백 manifest: {backup.ManifestPath}");
 
         var stopwatch = Stopwatch.StartNew();
         var progressTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -133,13 +169,16 @@ public partial class MainWindow
         };
         progressTimer.Start();
 
+        var completedSuccessfully = false;
         try
         {
             var minimumRuntime = GetRequiredVcRuntime(target.Version);
             if (minimumRuntime is not null)
             {
                 StatusText.Text = $"Visual C++ 런타임 확인 중... 최소 {minimumRuntime.Major}.{minimumRuntime.Minor}";
+                Log($"Visual C++ 런타임 확인: 최소 {minimumRuntime}");
                 var runtimeResult = await _vcRuntimeInstaller.EnsureMinimumAsync(package.Architecture, minimumRuntime);
+                Log($"VC++ 런타임 결과: before={runtimeResult.BeforeVersion?.ToString() ?? "확인 불가"}, after={runtimeResult.AfterVersion?.ToString() ?? "확인 불가"}, installed={runtimeResult.Installed}, exit={runtimeResult.ExitCode}");
                 if (!runtimeResult.Success)
                 {
                     throw new InvalidOperationException(
@@ -147,16 +186,9 @@ public partial class MainWindow
                         $"현재 런타임: {runtimeResult.AfterVersion?.ToString() ?? "확인 불가"}");
                 }
 
-                if (runtimeResult.Installed)
+                if (!string.IsNullOrWhiteSpace(runtimeResult.Sha256))
                 {
-                    AppendDetail(
-                        XamppComponentType.Php,
-                        $"Visual C++ 런타임 자동 보강: {runtimeResult.BeforeVersion?.ToString() ?? "없음/확인 불가"} → " +
-                        $"{runtimeResult.AfterVersion?.ToString() ?? "확인 불가"}");
-                    if (!string.IsNullOrWhiteSpace(runtimeResult.Sha256))
-                    {
-                        AppendDetail(XamppComponentType.Php, $"VC++ 재배포 패키지 SHA256: {runtimeResult.Sha256}");
-                    }
+                    Log($"VC++ 재배포 패키지 SHA256: {runtimeResult.Sha256}");
                 }
 
                 if (runtimeResult.RebootRequired)
@@ -166,25 +198,23 @@ public partial class MainWindow
                 }
             }
 
-            // ZIP 해제, 실행 파일 검증, 디렉터리 교체처럼 동기 파일 I/O가 포함되므로
-            // 전체 실행기를 worker thread에서 수행해 WPF UI가 멈추지 않게 한다.
             var result = await Task.Run(async () =>
                 await _phpUpdateExecutor.ExecuteAsync(installation, target, package, backup));
 
             progressTimer.Stop();
             foreach (var step in result.Steps)
             {
-                AppendDetail(XamppComponentType.Php, "실행: " + step);
+                Log("실행: " + step);
             }
             foreach (var warning in result.Warnings)
             {
-                AppendDetail(XamppComponentType.Php, "주의: " + warning);
+                Log("주의: " + warning);
             }
 
             if (!result.Success)
             {
-                AppendDetail(XamppComponentType.Php,
-                    result.RolledBack ? "업데이트 실패 후 자동 롤백됨" : "업데이트 실행 전/초기 단계에서 실패함");
+                Log(result.RolledBack ? "업데이트 실패 후 자동 롤백됨" : "업데이트 실행 전/초기 단계에서 실패함");
+                Log("오류: " + result.Error);
                 StatusText.Text = "PHP 업데이트 실패: " + result.Error;
                 MessageBox.Show(this,
                     $"PHP 업데이트에 실패했습니다.\n\n{result.Error}\n\n" +
@@ -195,6 +225,8 @@ public partial class MainWindow
                 return;
             }
 
+            completedSuccessfully = true;
+            Log($"업데이트 완료: PHP {current} → {target.Version}");
             StatusText.Text = $"PHP 업데이트 완료: {current} → {target.Version}";
             MessageBox.Show(this,
                 $"PHP 업데이트가 완료되었습니다.\n\n{current} → {target.Version}",
@@ -203,18 +235,35 @@ public partial class MainWindow
                 MessageBoxImage.Information);
 
             await InspectAsync(installation.RootPath, "PostUpdate");
+            AppendDetail(XamppComponentType.Php, "--- 최근 PHP 업데이트 실행 로그 ---");
+            foreach (var line in runLog)
+            {
+                AppendDetail(XamppComponentType.Php, line);
+            }
         }
         catch (Exception ex)
         {
             progressTimer.Stop();
             StatusText.Text = "PHP 업데이트 실행 실패: " + ex.Message;
-            AppendDetail(XamppComponentType.Php, "실행 예외: " + ex.Message);
+            Log("실행 예외: " + ex.Message);
             MessageBox.Show(this, ex.Message, "PHP 업데이트", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
             progressTimer.Stop();
             stopwatch.Stop();
+            Log($"실행 종료: {(completedSuccessfully ? "성공" : "실패/중단")} / 경과 {stopwatch.Elapsed:mm\\:ss}");
+            try
+            {
+                var logPath = _executionLogService.Save("PHP", runLog);
+                AppendDetail(XamppComponentType.Php, "로그 파일: " + logPath);
+                if (_phpLogButton is not null) _phpLogButton.IsEnabled = true;
+            }
+            catch (Exception logEx)
+            {
+                AppendDetail(XamppComponentType.Php, "로그 저장 실패: " + logEx.Message);
+            }
+
             _phpUpdateRunning = false;
             SetBusy(false);
             RefreshPhpExecuteEnabled();
