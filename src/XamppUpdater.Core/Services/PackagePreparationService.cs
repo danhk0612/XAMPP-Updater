@@ -49,6 +49,19 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
         await DownloadAsync(downloadUrl, temporaryPath, cancellationToken);
         File.Move(temporaryPath, packagePath, overwrite: true);
 
+        var actualSha256 = ComputeSha256(packagePath);
+        var officialSha256 = await TryGetOfficialSha256Async(
+            target,
+            sourceUrl,
+            fileName,
+            cancellationToken);
+        if (officialSha256 is not null &&
+            !string.Equals(actualSha256, officialSha256, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"공식 SHA256과 다운로드 파일이 일치하지 않습니다. 공식: {officialSha256}, 실제: {actualSha256}");
+        }
+
         var expectedArchitecture = target.Type switch
         {
             XamppComponentType.Apache => profile.ApacheArchitecture,
@@ -58,8 +71,26 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
         };
         var requirePhpApacheModule = target.Type == XamppComponentType.Php && profile.ApachePhpIntegration.IsModuleLoaded;
         var inspection = InspectArchive(packagePath, target.Type, expectedArchitecture, requirePhpApacheModule);
-        var info = new FileInfo(packagePath);
+        var warnings = inspection.Warnings.ToList();
+        warnings.Add(officialSha256 is null
+            ? "공식 SHA256 manifest를 자동 확보하지 못해 다운로드 파일의 로컬 SHA256만 기록했습니다."
+            : "공식 SHA256 manifest와 다운로드 파일의 해시가 일치합니다.");
 
+        var inventory = PackageInventoryService.Compare(
+            profile.RootPath,
+            packagePath,
+            target.Type,
+            inspection.PayloadEntry);
+        warnings.Add(
+            $"파일 인벤토리: 현재 {inventory.CurrentFiles:N0} / 패키지 {inventory.PackageFiles:N0} / 공통 {inventory.CommonFiles:N0} / 기존만 {inventory.CurrentOnlyFiles:N0} / 신규만 {inventory.PackageOnlyFiles:N0}");
+        if (inventory.CompatibilityItems.Count > 0)
+        {
+            var label = target.Type == XamppComponentType.Apache ? "패키지에 없는 기존 Apache 모듈" : "패키지에 없는 기존 PHP 확장";
+            warnings.Add($"{label}: {string.Join(", ", inventory.CompatibilityItems.Take(12))}" +
+                         (inventory.CompatibilityItems.Count > 12 ? $" 외 {inventory.CompatibilityItems.Count - 12}개" : string.Empty));
+        }
+
+        var info = new FileInfo(packagePath);
         return new PackagePreparationResult(
             target.Type,
             target.Version,
@@ -68,12 +99,12 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
             packagePath,
             fileName,
             info.Length,
-            ComputeSha256(packagePath),
+            actualSha256,
             inspection.Architecture,
             inspection.PayloadEntry,
             inspection.EntryCount,
             inspection.PhpApacheModulePresent,
-            inspection.Warnings);
+            warnings);
     }
 
     internal static PackageArchiveInspection InspectArchive(
@@ -128,6 +159,70 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
         }
 
         return new Uri(new Uri(pageUrl), match).AbsoluteUri;
+    }
+
+    internal static string? ResolveSha256ManifestUrl(string pageUrl, string html)
+    {
+        var href = Sha256ManifestLinkRegex().Matches(html)
+            .Select(match => match.Groups["href"].Value)
+            .FirstOrDefault(value => value.Contains("sha256sums.txt", StringComparison.OrdinalIgnoreCase));
+        return string.IsNullOrWhiteSpace(href) ? null : new Uri(new Uri(pageUrl), href).AbsoluteUri;
+    }
+
+    internal static string? ParseSha256Sum(string text, string fileName)
+    {
+        foreach (var rawLine in text.Replace("\r\n", "\n").Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var match = Sha256LineRegex().Match(line);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            var listedFile = match.Groups["file"].Value.TrimStart('*');
+            if (string.Equals(Path.GetFileName(listedFile), fileName, StringComparison.OrdinalIgnoreCase))
+            {
+                return match.Groups["hash"].Value.ToUpperInvariant();
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<string?> TryGetOfficialSha256Async(
+        UpdateTargetOption target,
+        string sourceUrl,
+        string fileName,
+        CancellationToken cancellationToken)
+    {
+        if (target.Type != XamppComponentType.MariaDb ||
+            (Uri.TryCreate(sourceUrl, UriKind.Absolute, out var uri) && uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)))
+        {
+            return null;
+        }
+
+        try
+        {
+            var pageHtml = await GetStringAsync(sourceUrl, cancellationToken);
+            var manifestUrl = ResolveSha256ManifestUrl(sourceUrl, pageHtml);
+            if (manifestUrl is null)
+            {
+                return null;
+            }
+
+            var sums = await GetStringAsync(manifestUrl, cancellationToken);
+            return ParseSha256Sum(sums, fileName);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static async Task<string> ResolveDownloadUrlAsync(
@@ -233,6 +328,12 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
 
     [GeneratedRegex(@"href\s*=\s*[""'](?<href>[^""']+\.zip)[""']", RegexOptions.IgnoreCase)]
     private static partial Regex MariaDbZipLinkRegex();
+
+    [GeneratedRegex(@"href\s*=\s*[""'](?<href>[^""']*sha256sums\.txt[^""']*)[""']", RegexOptions.IgnoreCase)]
+    private static partial Regex Sha256ManifestLinkRegex();
+
+    [GeneratedRegex(@"^(?<hash>[A-Fa-f0-9]{64})\s+\*?(?<file>.+)$")]
+    private static partial Regex Sha256LineRegex();
 }
 
 public sealed record PackageArchiveInspection(
