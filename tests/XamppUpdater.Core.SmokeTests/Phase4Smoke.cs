@@ -22,6 +22,7 @@ internal static class Phase4Smoke
                 "memory_limit=512M\n" +
                 "extension=php_curl.dll\n" +
                 "extension=bz2\n" +
+                "extension=gd2\n" +
                 "extension=php-zip\n" +
                 "extension=php7.3-zip\n" +
                 "zend_extension=php_xdebug.dll\n" +
@@ -30,6 +31,7 @@ internal static class Phase4Smoke
                 "session.sid_bits_per_character=5\n");
             File.WriteAllBytes(Path.Combine(extRoot, "php_curl.dll"), Array.Empty<byte>());
             File.WriteAllBytes(Path.Combine(extRoot, "php_bz2.dll"), Array.Empty<byte>());
+            File.WriteAllBytes(Path.Combine(extRoot, "php_gd.dll"), Array.Empty<byte>());
             File.WriteAllBytes(Path.Combine(extRoot, "php_zip.dll"), Array.Empty<byte>());
             File.WriteAllBytes(Path.Combine(newRoot, "php8ts.dll"), Array.Empty<byte>());
 
@@ -40,11 +42,15 @@ internal static class Phase4Smoke
             }
 
             var migrated = File.ReadAllText(result.IniPath);
+            var newBrowscap = Path.Combine(newRoot, "extras", "browscap.ini");
             if (!migrated.Contains("extension=php_curl.dll", StringComparison.Ordinal) ||
                 !migrated.Contains("extension=php_bz2.dll", StringComparison.Ordinal) ||
+                !migrated.Contains("extension=php_gd.dll", StringComparison.Ordinal) ||
                 migrated.Split("extension=php_zip.dll", StringSplitOptions.None).Length - 1 != 2 ||
                 !migrated.Contains("disabled missing/incompatible extension: zend_extension=php_xdebug.dll", StringComparison.Ordinal) ||
-                !migrated.Contains("disabled missing browscap file:", StringComparison.Ordinal) ||
+                !migrated.Contains($"browscap=\"{newBrowscap}\"", StringComparison.Ordinal) ||
+                !File.Exists(newBrowscap) ||
+                File.ReadAllText(newBrowscap) != "[browscap]" ||
                 !migrated.Contains("disabled deprecated setting for PHP 8.5.10: session.sid_length=26", StringComparison.Ordinal) ||
                 !migrated.Contains("disabled deprecated setting for PHP 8.5.10: session.sid_bits_per_character=5", StringComparison.Ordinal) ||
                 !File.Exists(Path.Combine(newRoot, "php.ini.xampp-updater-original")))
@@ -55,6 +61,7 @@ internal static class Phase4Smoke
             AssertEqual("php-zip alias", "zip", PhpIniMigrationService.NormalizeExtensionName("php-zip"));
             AssertEqual("php7.3-zip alias", "zip", PhpIniMigrationService.NormalizeExtensionName("php7.3-zip"));
             AssertEqual("ext-zip alias", "zip", PhpIniMigrationService.NormalizeExtensionName("ext-zip"));
+            AssertEqual("gd2 legacy alias", "gd", PhpIniMigrationService.NormalizeExtensionName("gd2"));
 
             var stableHtml = "<td><a href='/package/zip/1.22.8'>1.22.8</a></td><td>stable</td>";
             AssertEqual("PECL stable release", "1.22.8", PhpExternalExtensionInstaller.ParseLatestStableRelease(stableHtml));
