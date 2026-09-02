@@ -21,10 +21,28 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
         Timeout = TimeSpan.FromMinutes(5)
     };
 
+    private static readonly SemaphoreSlim PackagePreparationGate = new(1, 1);
+
     public async Task<PackagePreparationResult> PrepareAsync(
         UpdateTargetOption target,
         InstallationCompatibilityProfile profile,
         CancellationToken cancellationToken = default)
+    {
+        await PackagePreparationGate.WaitAsync(cancellationToken);
+        try
+        {
+            return await PrepareCoreAsync(target, profile, cancellationToken);
+        }
+        finally
+        {
+            PackagePreparationGate.Release();
+        }
+    }
+
+    private async Task<PackagePreparationResult> PrepareCoreAsync(
+        UpdateTargetOption target,
+        InstallationCompatibilityProfile profile,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(target.PackageUrl))
         {
@@ -268,8 +286,14 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
     {
         try
         {
-            using var stream = entry.Open();
-            using var reader = new PEReader(stream, PEStreamOptions.LeaveOpen);
+            using var source = entry.Open();
+            using var seekable = entry.Length <= int.MaxValue
+                ? new MemoryStream((int)entry.Length)
+                : new MemoryStream();
+            source.CopyTo(seekable);
+            seekable.Position = 0;
+
+            using var reader = new PEReader(seekable, PEStreamOptions.LeaveOpen);
             return reader.PEHeaders.CoffHeader.Machine switch
             {
                 Machine.I386 => BinaryArchitecture.X86,
