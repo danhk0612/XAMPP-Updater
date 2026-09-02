@@ -138,25 +138,36 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
     private static IEnumerable<ServiceEntry> EnumerateServices()
     {
         const string servicesPath = @"SYSTEM\CurrentControlSet\Services";
-        using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64);
-        using var services = baseKey.OpenSubKey(servicesPath);
-        if (services is null)
-        {
-            yield break;
-        }
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var serviceName in services.GetSubKeyNames())
+        foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })
         {
-            using var service = services.OpenSubKey(serviceName);
-            if (service?.GetValue("ImagePath") is not string imagePath)
+            using var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
+            using var services = baseKey.OpenSubKey(servicesPath);
+            if (services is null)
             {
                 continue;
             }
 
-            var executablePath = ExtractExecutablePath(imagePath);
-            if (!string.IsNullOrWhiteSpace(executablePath))
+            foreach (var serviceName in services.GetSubKeyNames())
             {
-                yield return new ServiceEntry(serviceName, executablePath);
+                using var service = services.OpenSubKey(serviceName);
+                if (service?.GetValue("ImagePath") is not string imagePath)
+                {
+                    continue;
+                }
+
+                var executablePath = ExtractExecutablePath(imagePath);
+                if (string.IsNullOrWhiteSpace(executablePath))
+                {
+                    continue;
+                }
+
+                var key = $"{serviceName}\0{executablePath}";
+                if (seen.Add(key))
+                {
+                    yield return new ServiceEntry(serviceName, executablePath);
+                }
             }
         }
     }
@@ -188,7 +199,7 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
         return false;
     }
 
-    private static string ExtractExecutablePath(string imagePath)
+    internal static string ExtractExecutablePath(string imagePath)
     {
         var expanded = Environment.ExpandEnvironmentVariables(imagePath.Trim());
         string executable;
@@ -202,6 +213,17 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
         {
             var exeIndex = expanded.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
             executable = exeIndex >= 0 ? expanded[..(exeIndex + 4)] : expanded.Split(' ', 2)[0];
+        }
+
+        executable = executable.Trim().Trim('"');
+
+        if (!Path.HasExtension(executable))
+        {
+            var withExe = executable + ".exe";
+            if (File.Exists(withExe))
+            {
+                executable = withExe;
+            }
         }
 
         try
@@ -218,7 +240,18 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
     {
         try
         {
-            return string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
+            var normalizedLeft = NormalizePath(left);
+            var normalizedRight = NormalizePath(right);
+
+            if (string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(
+                Path.ChangeExtension(normalizedLeft, null),
+                Path.ChangeExtension(normalizedRight, null),
+                StringComparison.OrdinalIgnoreCase);
         }
         catch
         {
