@@ -19,13 +19,16 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
 {
     private readonly IWindowsServiceController _serviceController;
     private readonly IPhpIniMigrationService _iniMigrationService;
+    private readonly IPhpExternalExtensionInstaller _externalExtensionInstaller;
 
     public PhpUpdateExecutor(
         IWindowsServiceController? serviceController = null,
-        IPhpIniMigrationService? iniMigrationService = null)
+        IPhpIniMigrationService? iniMigrationService = null,
+        IPhpExternalExtensionInstaller? externalExtensionInstaller = null)
     {
         _serviceController = serviceController ?? new WindowsServiceController();
         _iniMigrationService = iniMigrationService ?? new PhpIniMigrationService();
+        _externalExtensionInstaller = externalExtensionInstaller ?? new PhpExternalExtensionInstaller();
     }
 
     public async Task<UpdateExecutionResult> ExecuteAsync(
@@ -98,7 +101,21 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
             steps.Add("PHP 디렉터리 교체 완료");
 
             var currentIni = Path.Combine(oldPhpRoot, "php.ini");
-            var iniResult = _iniMigrationService.Migrate(currentIni, phpRoot);
+            var threadSafe = Directory.EnumerateFiles(phpRoot, "php*apache2_4.dll", SearchOption.TopDirectoryOnly).Any();
+            var extensionResult = await _externalExtensionInstaller.InstallMissingAsync(
+                currentIni,
+                phpRoot,
+                target.Version,
+                threadSafe,
+                package.Architecture,
+                cancellationToken);
+            warnings.AddRange(extensionResult.Warnings);
+            if (extensionResult.InstalledDlls.Count > 0)
+            {
+                steps.Add("외부 호환 확장 자동 복원: " + string.Join(", ", extensionResult.InstalledDlls));
+            }
+
+            var iniResult = _iniMigrationService.Migrate(currentIni, phpRoot, target.Version);
             warnings.AddRange(iniResult.Warnings);
             if (iniResult.Migrated)
             {
