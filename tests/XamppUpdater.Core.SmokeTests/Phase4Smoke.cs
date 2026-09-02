@@ -76,6 +76,7 @@ internal static class Phase4Smoke
             }
 
             CheckReviewedOverride(root);
+            CheckApacheReviewedOverride(root);
         }
         finally
         {
@@ -118,6 +119,38 @@ internal static class Phase4Smoke
         if (invalidated.IniPath is null || string.Equals(File.ReadAllText(invalidated.IniPath), approved, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("Phase 4 smoke: stale php.ini override was not invalidated after source change.");
+        }
+    }
+
+    private static void CheckApacheReviewedOverride(string root)
+    {
+        var xamppRoot = Path.Combine(root, "apache-review-xampp");
+        var confRoot = Path.Combine(xamppRoot, "apache", "conf");
+        var extraRoot = Path.Combine(confRoot, "extra");
+        Directory.CreateDirectory(extraRoot);
+        File.WriteAllText(Path.Combine(confRoot, "httpd.conf"), "ServerRoot \"C:/xampp/apache\"\nInclude conf/extra/httpd-vhosts.conf\n");
+        File.WriteAllText(Path.Combine(extraRoot, "httpd-vhosts.conf"), "Listen 80\n");
+
+        var storeRoot = Path.Combine(root, "apache-overrides");
+        var store = new ApacheMigrationOverrideStore(storeRoot);
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["httpd.conf"] = "ServerRoot \"C:/xampp/apache\"\nInclude conf/extra/httpd-vhosts.conf\n# reviewed\n",
+            ["extra/httpd-vhosts.conf"] = "Listen 8080\n"
+        };
+        store.Save(xamppRoot, "2.4.68", confRoot, files);
+
+        var loaded = store.TryLoad(xamppRoot, "2.4.68", confRoot);
+        if (loaded is null || loaded.Files.Count != 2 ||
+            !loaded.Files["extra/httpd-vhosts.conf"].Contains("8080", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Phase 4 smoke: Apache reviewed configuration was not loaded.");
+        }
+
+        File.AppendAllText(Path.Combine(extraRoot, "httpd-vhosts.conf"), "# changed after review\n");
+        if (store.TryLoad(xamppRoot, "2.4.68", confRoot) is not null)
+        {
+            throw new InvalidOperationException("Phase 4 smoke: stale Apache configuration override was not invalidated.");
         }
     }
 
