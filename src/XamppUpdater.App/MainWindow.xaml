@@ -5,7 +5,7 @@
         MinHeight="800" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
         FontFamily="Segoe UI">
-    <Grid Margin="20">
+    <Grid x:Name="RootGrid" Margin="20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
