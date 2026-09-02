@@ -90,7 +90,7 @@ public sealed class MariaDbLogicalBackupService : IMariaDbLogicalBackupService
         var logicalRoot = Path.Combine(preflight.BackupDestination, "logical");
         Directory.CreateDirectory(logicalRoot);
         var outputPath = Path.Combine(logicalRoot, "all-databases.sql");
-        var temporaryOutput = outputPath + ".part";
+        var temporaryOutput = Path.Combine(logicalRoot, $"all-databases-{Guid.NewGuid():N}.sql.part");
         var optionFile = default(string);
 
         try
@@ -134,29 +134,30 @@ public sealed class MariaDbLogicalBackupService : IMariaDbLogicalBackupService
             using var process = new Process { StartInfo = startInfo };
             process.Start();
 
-            await using var output = new FileStream(
-                temporaryOutput,
-                FileMode.Create,
-                FileAccess.Write,
-                FileShare.None,
-                81920,
-                useAsync: true);
-            var copyTask = process.StandardOutput.BaseStream.CopyToAsync(output, cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            string errorText;
+            await using (var output = new FileStream(
+                             temporaryOutput,
+                             FileMode.CreateNew,
+                             FileAccess.Write,
+                             FileShare.None,
+                             81920,
+                             useAsync: true))
+            {
+                var copyTask = process.StandardOutput.BaseStream.CopyToAsync(output, cancellationToken);
+                var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
-            await process.WaitForExitAsync(cancellationToken);
-            await copyTask;
-            await output.FlushAsync(cancellationToken);
-            var errorText = await errorTask;
+                await process.WaitForExitAsync(cancellationToken);
+                await copyTask;
+                await output.FlushAsync(cancellationToken);
+                errorText = await errorTask;
+            }
 
             if (process.ExitCode != 0)
             {
-                output.Close();
                 if (File.Exists(temporaryOutput)) File.Delete(temporaryOutput);
                 return new MariaDbLogicalBackupResult(false, false, null, 0, null, errorText.Trim());
             }
 
-            output.Close();
             File.Move(temporaryOutput, outputPath, overwrite: true);
             var info = new FileInfo(outputPath);
             var sha256 = ComputeSha256(outputPath);
