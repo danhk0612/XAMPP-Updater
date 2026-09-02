@@ -2,7 +2,9 @@ name: build
 
 on:
   push:
-    branches: [main, phase-1-foundation]
+    branches:
+      - main
+      - 'phase-*'
   pull_request:
     branches: [main]
 
@@ -18,5 +20,5 @@ jobs:
         run: dotnet restore XamppUpdater.sln
       - name: Build
         run: dotnet build XamppUpdater.sln --configuration Release --no-restore
-      - name: Phase 1 smoke tests
+      - name: Smoke tests
         run: dotnet run --project .\tests\XamppUpdater.Core.SmokeTests\XamppUpdater.Core.SmokeTests.csproj --configuration Release --no-build
