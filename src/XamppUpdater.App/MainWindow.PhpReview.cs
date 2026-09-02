@@ -16,12 +16,12 @@ public partial class MainWindow
     private void InitializePhpMigrationReviewUi()
     {
         if (_phpMigrationReviewButton is not null) return;
-        if (PhpDiffButton.Parent is not StackPanel actionPanel) return;
+        if (PhpDiffButton.Parent is not Panel actionPanel) return;
 
         _phpMigrationReviewButton = new Button
         {
             Content = "마이그레이션 검토",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
             ToolTip = "자동 변환/대체 결과를 확인하고 최종 php.ini를 직접 편집·확정합니다."
