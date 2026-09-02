@@ -49,7 +49,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
             .Select(match => match.Groups["version"].Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(value => new { Value = value, Parsed = TryVersion(value) })
-            .Where(item => item.Parsed is not null && (current is null || item.Parsed > current))
+            .Where(item => item.Parsed is not null && (current is null || item.Parsed.CompareTo(current) > 0))
             .OrderByDescending(item => item.Parsed)
             .Select(item => new SelectableVersionEntry(
                 XamppComponentType.Apache,
@@ -88,7 +88,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
                 Architecture = match.Groups["arch"].Value,
                 Parsed = TryVersion(match.Groups["version"].Value)
             })
-            .Where(item => item.Parsed is not null && (current is null || item.Parsed > current))
+            .Where(item => item.Parsed is not null && (current is null || item.Parsed.CompareTo(current) > 0))
             .Where(item => item.Architecture.Equals(expectedArch, StringComparison.OrdinalIgnoreCase))
             .Where(item => !requireThreadSafe || !item.IsNts)
             .GroupBy(item => item.VersionText, StringComparer.OrdinalIgnoreCase)
@@ -145,7 +145,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
             .Select(match => match.Groups["version"].Value)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(value => new { Value = value, Parsed = TryVersion(value) })
-            .Where(item => item.Parsed is not null && (current is null || item.Parsed > current))
+            .Where(item => item.Parsed is not null && (current is null || item.Parsed.CompareTo(current) > 0))
             .OrderByDescending(item => item.Parsed)
             .Select(item => new SelectableVersionEntry(
                 XamppComponentType.MariaDb,
