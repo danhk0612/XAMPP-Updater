@@ -31,12 +31,16 @@ public sealed class ApacheMigrationOverrideStore : IApacheMigrationOverrideStore
     public string Save(string xamppRoot, string targetVersion, string sourceConfRoot, IReadOnlyDictionary<string, string> files)
     {
         Directory.CreateDirectory(_root);
+        var copiedFiles = files.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
         var record = new ApacheMigrationOverride(
             Path.GetFullPath(xamppRoot),
             targetVersion,
             ComputeConfHash(sourceConfRoot),
             DateTimeOffset.Now,
-            new Dictionary<string, string>(files, StringComparer.OrdinalIgnoreCase));
+            copiedFiles);
         var path = GetPath(xamppRoot, targetVersion);
         File.WriteAllText(path, JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }), Encoding.UTF8);
         return path;
