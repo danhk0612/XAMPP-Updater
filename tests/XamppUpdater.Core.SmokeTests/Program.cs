@@ -8,6 +8,10 @@ CheckVersion(XamppComponentType.Php, "PHP 8.4.12 (cli) (built: Aug 26 2026 10:00
 CheckVersion(XamppComponentType.MariaDb, "mysqld  Ver 15.1 Distrib 10.4.32-MariaDB, for Win64 (AMD64)", "10.4.32");
 CheckVersion(XamppComponentType.MariaDb, "mariadbd  Ver 11.8.3-MariaDB for Win64 on AMD64", "11.8.3");
 
+AssertEqual("service state stopped", "STOPPED", WindowsServiceStateReader.MapState(1));
+AssertEqual("service state running", "RUNNING", WindowsServiceStateReader.MapState(4));
+AssertEqual("service state paused", "PAUSED", WindowsServiceStateReader.MapState(7));
+
 AssertEqual(
     "Apache online parser",
     "2.4.68",
