@@ -177,9 +177,9 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
             using var reader = new PEReader(stream, PEStreamOptions.LeaveOpen);
             return reader.PEHeaders.CoffHeader.Machine switch
             {
-                System.Reflection.PortableExecutable.Machine.I386 => BinaryArchitecture.X86,
-                System.Reflection.PortableExecutable.Machine.Amd64 => BinaryArchitecture.X64,
-                System.Reflection.PortableExecutable.Machine.Arm64 => BinaryArchitecture.Arm64,
+                Machine.I386 => BinaryArchitecture.X86,
+                Machine.Amd64 => BinaryArchitecture.X64,
+                Machine.Arm64 => BinaryArchitecture.Arm64,
                 _ => BinaryArchitecture.Unknown
             };
         }
@@ -231,7 +231,7 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
     [GeneratedRegex(@"php\d*apache2_4\.dll$", RegexOptions.IgnoreCase)]
     private static partial Regex PhpApacheModuleRegex();
 
-    [GeneratedRegex(@"href\s*=\s*[\"'](?<href>[^\"']+\.zip)[\"']", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"href\s*=\s*[""'](?<href>[^""']+\.zip)[""']", RegexOptions.IgnoreCase)]
     private static partial Regex MariaDbZipLinkRegex();
 }
 
