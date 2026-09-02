@@ -26,7 +26,7 @@ public partial class MainWindow
             return;
         }
 
-        if (PhpDiffButton.Parent is not StackPanel actionPanel)
+        if (PhpDiffButton.Parent is not Panel actionPanel)
         {
             return;
         }
@@ -34,7 +34,7 @@ public partial class MainWindow
         _phpExecuteButton = new Button
         {
             Content = "PHP 업데이트 실행",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
             ToolTip = "준비된 패키지와 롤백 백업을 사용해 PHP를 실제 교체합니다."
@@ -45,7 +45,7 @@ public partial class MainWindow
         _phpLogButton = new Button
         {
             Content = "최근 로그 열기",
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = _executionLogService.FindLatest("PHP") is not null,
             ToolTip = "%LOCALAPPDATA%\\XamppUpdater\\Logs에 저장된 최근 PHP 업데이트 로그를 엽니다."
