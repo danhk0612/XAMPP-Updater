@@ -7,8 +7,9 @@ namespace XamppUpdater.Core.Services;
 
 public interface IVisualCppRuntimeInstaller
 {
-    Task<VisualCppRuntimeInstallResult> EnsureLatestAsync(
+    Task<VisualCppRuntimeInstallResult> EnsureMinimumAsync(
         BinaryArchitecture architecture,
+        Version minimumVersion,
         CancellationToken cancellationToken = default);
 }
 
@@ -16,15 +17,23 @@ public sealed class VisualCppRuntimeInstaller : IVisualCppRuntimeInstaller
 {
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromMinutes(5) };
 
-    public async Task<VisualCppRuntimeInstallResult> EnsureLatestAsync(
+    public async Task<VisualCppRuntimeInstallResult> EnsureMinimumAsync(
         BinaryArchitecture architecture,
+        Version minimumVersion,
         CancellationToken cancellationToken = default)
     {
-        var url = architecture switch
+        var before = GetInstalledVersion(architecture);
+        if (before is not null && before >= minimumVersion)
         {
-            BinaryArchitecture.X86 => "https://aka.ms/vc14/vc_redist.x86.exe",
-            BinaryArchitecture.Arm64 => "https://aka.ms/vc14/vc_redist.arm64.exe",
-            _ => "https://aka.ms/vc14/vc_redist.x64.exe"
+            return new VisualCppRuntimeInstallResult(
+                true, false, false, 0, before, before, null, null);
+        }
+
+        var (url, fileName) = architecture switch
+        {
+            BinaryArchitecture.X86 => ("https://aka.ms/vc14/vc_redist.x86.exe", "vc_redist.x86.exe"),
+            BinaryArchitecture.Arm64 => ("https://aka.ms/vc14/vc_redist.arm64.exe", "vc_redist.arm64.exe"),
+            _ => ("https://aka.ms/vc14/vc_redist.x64.exe", "vc_redist.x64.exe")
         };
 
         var cacheRoot = Path.Combine(
@@ -32,17 +41,13 @@ public sealed class VisualCppRuntimeInstaller : IVisualCppRuntimeInstaller
             "XamppUpdater",
             "Runtime");
         Directory.CreateDirectory(cacheRoot);
-        var installerPath = Path.Combine(cacheRoot, Path.GetFileName(new Uri(url).LocalPath));
-        if (string.IsNullOrWhiteSpace(Path.GetFileName(installerPath)) || installerPath.EndsWith("Runtime", StringComparison.OrdinalIgnoreCase))
-        {
-            installerPath = Path.Combine(cacheRoot, architecture == BinaryArchitecture.X86 ? "vc_redist.x86.exe" : architecture == BinaryArchitecture.Arm64 ? "vc_redist.arm64.exe" : "vc_redist.x64.exe");
-        }
-
+        var installerPath = Path.Combine(cacheRoot, fileName);
         var temporaryPath = installerPath + ".part";
+
         await DownloadAsync(url, temporaryPath, cancellationToken);
         File.Move(temporaryPath, installerPath, overwrite: true);
-
         var sha256 = ComputeSha256(installerPath);
+
         var start = new ProcessStartInfo
         {
             FileName = installerPath,
@@ -56,13 +61,50 @@ public sealed class VisualCppRuntimeInstaller : IVisualCppRuntimeInstaller
             ?? throw new InvalidOperationException("Visual C++ Redistributable 설치 프로그램을 시작하지 못했습니다.");
         await process.WaitForExitAsync(cancellationToken);
 
-        return process.ExitCode switch
+        var success = process.ExitCode is 0 or 1638 or 3010;
+        var rebootRequired = process.ExitCode == 3010;
+        var after = GetInstalledVersion(architecture);
+        if (success && !rebootRequired && (after is null || after < minimumVersion))
         {
-            0 => new VisualCppRuntimeInstallResult(true, false, process.ExitCode, installerPath, sha256),
-            1638 => new VisualCppRuntimeInstallResult(true, false, process.ExitCode, installerPath, sha256),
-            3010 => new VisualCppRuntimeInstallResult(true, true, process.ExitCode, installerPath, sha256),
-            _ => new VisualCppRuntimeInstallResult(false, false, process.ExitCode, installerPath, sha256)
-        };
+            success = false;
+        }
+
+        return new VisualCppRuntimeInstallResult(
+            success,
+            true,
+            rebootRequired,
+            process.ExitCode,
+            before,
+            after,
+            installerPath,
+            sha256);
+    }
+
+    internal static Version? GetInstalledVersion(BinaryArchitecture architecture)
+    {
+        try
+        {
+            string directory;
+            if (architecture == BinaryArchitecture.X86 && Environment.Is64BitOperatingSystem)
+            {
+                directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SysWOW64");
+            }
+            else
+            {
+                directory = Environment.SystemDirectory;
+            }
+
+            var path = Path.Combine(directory, "VCRUNTIME140.dll");
+            if (!File.Exists(path)) return null;
+            var versionText = FileVersionInfo.GetVersionInfo(path).FileVersion;
+            if (string.IsNullOrWhiteSpace(versionText)) return null;
+            var normalized = versionText.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+            return Version.TryParse(normalized, out var version) ? version : null;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static async Task DownloadAsync(string url, string destination, CancellationToken cancellationToken)
@@ -85,7 +127,10 @@ public sealed class VisualCppRuntimeInstaller : IVisualCppRuntimeInstaller
 
 public sealed record VisualCppRuntimeInstallResult(
     bool Success,
+    bool Installed,
     bool RebootRequired,
     int ExitCode,
-    string InstallerPath,
-    string Sha256);
+    Version? BeforeVersion,
+    Version? AfterVersion,
+    string? InstallerPath,
+    string? Sha256);
