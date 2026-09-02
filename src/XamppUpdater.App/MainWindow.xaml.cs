@@ -269,10 +269,10 @@ public partial class MainWindow : Window
     {
         var status = candidate.Status switch
         {
-            CandidateCompatibilityStatus.Compatible => "호환",
-            CandidateCompatibilityStatus.Conditional => "조건부",
-            CandidateCompatibilityStatus.Blocked => "차단",
-            _ => "없음"
+            CandidateCompatibilityStatus.Automatic => "자동 가능",
+            CandidateCompatibilityStatus.Assisted => "보조 업데이트",
+            CandidateCompatibilityStatus.ManualReview => "검토 후 진행",
+            _ => "후보 없음"
         };
 
         if (candidate.Version is null)
