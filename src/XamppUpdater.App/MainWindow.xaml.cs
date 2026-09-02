@@ -1,4 +1,3 @@
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -21,7 +20,6 @@ public partial class MainWindow : Window
     private CandidatePackageCatalog? _lastCandidates;
     private SelectableVersionCatalog? _selectableVersions;
     private UpdateTargetCatalog? _targetCatalog;
-    private readonly Dictionary<XamppComponentType, string> _manualPackages = new();
 
     public MainWindow()
     {
@@ -78,37 +76,6 @@ public partial class MainWindow : Window
         RenderSelectedPlan(target);
     }
 
-    private void SelectPackageButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is not Button button ||
-            !Enum.TryParse<XamppComponentType>(button.Tag?.ToString(), true, out var type))
-        {
-            return;
-        }
-
-        var dialog = new OpenFileDialog
-        {
-            Title = $"{type} 업데이트 패키지 선택",
-            Filter = "ZIP 패키지 (*.zip)|*.zip|모든 파일 (*.*)|*.*",
-            Multiselect = false,
-            CheckFileExists = true
-        };
-
-        if (dialog.ShowDialog(this) != true)
-        {
-            return;
-        }
-
-        _manualPackages[type] = dialog.FileName;
-        SetManualPackageText(type, $"직접 지정: {Path.GetFileName(dialog.FileName)}");
-
-        var selected = GetTargetComboBox(type).SelectedItem as UpdateTargetOption;
-        if (selected is not null)
-        {
-            RenderSelectedPlan(selected);
-        }
-    }
-
     private async Task AutoDetectAsync()
     {
         SetBusy(true, "XAMPP 설치 경로 자동 감지 중...");
@@ -160,13 +127,11 @@ public partial class MainWindow : Window
             _lastCandidates = null;
             _selectableVersions = null;
             _targetCatalog = null;
-            _manualPackages.Clear();
             InstallPathComboBox.Text = result.installation.RootPath;
             RenderInstallation(result.installation);
             RenderCompatibilityProfile(result.profile);
             ClearCandidates();
             ClearTargetSelectors();
-            ClearManualPackages();
 
             if (_lastCatalog is not null)
             {
@@ -193,7 +158,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        SetBusy(true, "최신 버전, 전체 선택 버전과 실제 패키지 정보를 확인하는 중...");
+        SetBusy(true, "최신 버전과 계열별 업데이트 버전을 확인하는 중...");
 
         try
         {
@@ -214,7 +179,7 @@ public partial class MainWindow : Window
             RenderOnlineCatalog(_lastCatalog);
             RenderCandidates(_lastCandidates);
             RenderTargetSelectors(_targetCatalog);
-            StatusText.Text = $"온라인 확인 완료: {_lastCatalog.CheckedAt:yyyy-MM-dd HH:mm:ss} / 선택 가능 버전 {_selectableVersions.Entries.Count}개";
+            StatusText.Text = $"온라인 확인 완료: {_lastCatalog.CheckedAt:yyyy-MM-dd HH:mm:ss} / 계열별 선택 버전 {_selectableVersions.Entries.Count}개";
         }
         catch (Exception ex)
         {
@@ -356,17 +321,13 @@ public partial class MainWindow : Window
         var plan = UpdateTargetPlanner.BuildPlan(target.Type, installedVersion, target, _lastProfile);
         var text = FormatPlan(plan);
 
-        if (_manualPackages.TryGetValue(target.Type, out var manualPackage))
-        {
-            text += $"\n직접 지정 패키지: {Path.GetFileName(manualPackage)} — Phase 3에서 내부 버전/아키텍처/구조를 검증합니다.";
-        }
-        else if (target.PackageUrl is not null)
+        if (target.PackageUrl is not null)
         {
             text += $"\n패키지: {target.PackageFileName ?? "공식 패키지 위치 확인됨"}";
         }
         else
         {
-            text += "\n패키지: 자동 확인되지 않음 — 패키지 지정으로 계속 진행할 수 있습니다.";
+            text += "\n패키지: 업데이트 준비 단계에서 선택 버전에 맞는 Windows 패키지를 확인합니다.";
         }
 
         SetPlanText(target.Type, text);
@@ -431,33 +392,6 @@ public partial class MainWindow : Window
         return $"실제 후보: {candidate.Version} [{status}]{suffix}";
     }
 
-    private ComboBox GetTargetComboBox(XamppComponentType type)
-    {
-        return type switch
-        {
-            XamppComponentType.Apache => ApacheTargetComboBox,
-            XamppComponentType.Php => PhpTargetComboBox,
-            XamppComponentType.MariaDb => MariaDbTargetComboBox,
-            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
-        };
-    }
-
-    private void SetManualPackageText(XamppComponentType type, string text)
-    {
-        switch (type)
-        {
-            case XamppComponentType.Apache:
-                ApacheManualPackageText.Text = text;
-                break;
-            case XamppComponentType.Php:
-                PhpManualPackageText.Text = text;
-                break;
-            case XamppComponentType.MariaDb:
-                MariaDbManualPackageText.Text = text;
-                break;
-        }
-    }
-
     private void ClearCandidates()
     {
         ApacheCandidateText.Text = "실제 후보: -";
@@ -476,13 +410,6 @@ public partial class MainWindow : Window
         ApachePlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
         PhpPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
         MariaDbPlanText.Text = "업데이트 경로: 온라인 확인 후 선택할 수 있습니다.";
-    }
-
-    private void ClearManualPackages()
-    {
-        ApacheManualPackageText.Text = "직접 지정: 없음";
-        PhpManualPackageText.Text = "직접 지정: 없음";
-        MariaDbManualPackageText.Text = "직접 지정: 없음";
     }
 
     private void SetBusy(bool isBusy, string? message = null)
