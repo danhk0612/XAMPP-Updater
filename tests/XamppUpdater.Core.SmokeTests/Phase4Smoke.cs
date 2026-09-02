@@ -67,10 +67,50 @@ internal static class Phase4Smoke
             {
                 throw new InvalidOperationException("Phase 4 smoke: PECL Windows download parser failed.");
             }
+
+            CheckReviewedOverride(root);
         }
         finally
         {
             if (Directory.Exists(root)) Directory.Delete(root, recursive: true);
+        }
+    }
+
+    private static void CheckReviewedOverride(string root)
+    {
+        var xamppRoot = Path.Combine(root, "review-xampp");
+        var currentPhp = Path.Combine(xamppRoot, "php");
+        var swappedOldPhp = Path.Combine(xamppRoot, ".xampp-updater-php-old-smoke");
+        var targetPhp = Path.Combine(root, "review-target");
+        Directory.CreateDirectory(currentPhp);
+        Directory.CreateDirectory(swappedOldPhp);
+        Directory.CreateDirectory(Path.Combine(targetPhp, "ext"));
+        File.WriteAllBytes(Path.Combine(targetPhp, "php8ts.dll"), Array.Empty<byte>());
+
+        var sourceText = "memory_limit=512M\nextension=missing_extension\n";
+        var sourceIni = Path.Combine(currentPhp, "php.ini");
+        var swappedIni = Path.Combine(swappedOldPhp, "php.ini");
+        File.WriteAllText(sourceIni, sourceText);
+        File.WriteAllText(swappedIni, sourceText);
+
+        var store = new PhpMigrationOverrideStore();
+        const string approved = "memory_limit=768M\n; user reviewed missing_extension\n";
+        store.Save(xamppRoot, "8.5.10", sourceIni, approved);
+
+        var migration = new PhpIniMigrationService(store).Migrate(swappedIni, targetPhp, "8.5.10");
+        if (migration.IniPath is null || !string.Equals(File.ReadAllText(migration.IniPath), approved, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Phase 4 smoke: confirmed php.ini override was not applied.");
+        }
+
+        File.WriteAllText(swappedIni, sourceText + "display_errors=Off\n");
+        var targetPhp2 = Path.Combine(root, "review-target-2");
+        Directory.CreateDirectory(Path.Combine(targetPhp2, "ext"));
+        File.WriteAllBytes(Path.Combine(targetPhp2, "php8ts.dll"), Array.Empty<byte>());
+        var invalidated = new PhpIniMigrationService(store).Migrate(swappedIni, targetPhp2, "8.5.10");
+        if (invalidated.IniPath is null || string.Equals(File.ReadAllText(invalidated.IniPath), approved, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Phase 4 smoke: stale php.ini override was not invalidated after source change.");
         }
     }
 
