@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using XamppUpdater.Core.Models;
 using XamppUpdater.Core.Services;
 
@@ -14,6 +16,11 @@ public partial class MainWindow
 
     private void InitializePhase4Ui()
     {
+        if (_phpExecuteButton is not null)
+        {
+            return;
+        }
+
         if (PhpDiffButton.Parent is not StackPanel actionPanel)
         {
             return;
@@ -74,14 +81,15 @@ public partial class MainWindow
             return;
         }
 
-        var current = _lastInstallation.Components.FirstOrDefault(item => item.Type == XamppComponentType.Php)?.Version;
+        var installation = _lastInstallation;
+        var current = installation.Components.FirstOrDefault(item => item.Type == XamppComponentType.Php)?.Version;
         if (current is null)
         {
             return;
         }
 
         var backup = _backupLocator.FindLatest(
-            _lastInstallation.RootPath,
+            installation.RootPath,
             XamppComponentType.Php,
             current,
             target.Version);
@@ -112,11 +120,25 @@ public partial class MainWindow
 
         _phpUpdateRunning = true;
         RefreshPhpExecuteEnabled();
-        SetBusy(true, $"PHP {current} → {target.Version} 업데이트 실행 중...");
+        SetBusy(true, $"PHP {current} → {target.Version} 업데이트 준비 중...");
+        AppendDetail(XamppComponentType.Php, $"실행 시작: PHP {current} → {target.Version}");
+
+        var stopwatch = Stopwatch.StartNew();
+        var progressTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        progressTimer.Tick += (_, _) =>
+        {
+            StatusText.Text = $"PHP {current} → {target.Version} 업데이트 작업 중... {stopwatch.Elapsed:mm\\:ss}";
+        };
+        progressTimer.Start();
 
         try
         {
-            var result = await _phpUpdateExecutor.ExecuteAsync(_lastInstallation, target, package, backup);
+            // ZIP 해제, 실행 파일 검증, 디렉터리 교체처럼 동기 파일 I/O가 포함되므로
+            // 전체 실행기를 worker thread에서 수행해 WPF UI가 멈추지 않게 한다.
+            var result = await Task.Run(async () =>
+                await _phpUpdateExecutor.ExecuteAsync(installation, target, package, backup));
+
+            progressTimer.Stop();
             foreach (var step in result.Steps)
             {
                 AppendDetail(XamppComponentType.Php, "실행: " + step);
@@ -147,15 +169,19 @@ public partial class MainWindow
                 MessageBoxButton.OK,
                 MessageBoxImage.Information);
 
-            await InspectAsync(_lastInstallation.RootPath, "PostUpdate");
+            await InspectAsync(installation.RootPath, "PostUpdate");
         }
         catch (Exception ex)
         {
+            progressTimer.Stop();
             StatusText.Text = "PHP 업데이트 실행 실패: " + ex.Message;
+            AppendDetail(XamppComponentType.Php, "실행 예외: " + ex.Message);
             MessageBox.Show(this, ex.Message, "PHP 업데이트", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
+            progressTimer.Stop();
+            stopwatch.Stop();
             _phpUpdateRunning = false;
             SetBusy(false);
             RefreshPhpExecuteEnabled();
