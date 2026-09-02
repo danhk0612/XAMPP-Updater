@@ -8,6 +8,7 @@ namespace XamppUpdater.App;
 public partial class MainWindow : Window
 {
     private readonly IXamppInstallationDetector _detector = new XamppInstallationDetector();
+    private readonly IOnlineVersionCatalogService _onlineCatalog = new OnlineVersionCatalogService();
 
     public MainWindow()
     {
@@ -47,6 +48,11 @@ public partial class MainWindow : Window
 
         InstallPathComboBox.Text = dialog.FolderName;
         await InspectAsync(dialog.FolderName, "Manual");
+    }
+
+    private async void OnlineCheckButton_Click(object sender, RoutedEventArgs e)
+    {
+        await CheckOnlineVersionsAsync();
     }
 
     private async Task AutoDetectAsync()
@@ -90,7 +96,7 @@ public partial class MainWindow : Window
         {
             var installation = await Task.Run(() => _detector.Inspect(path, source));
             InstallPathComboBox.Text = installation.RootPath;
-            Render(installation);
+            RenderInstallation(installation);
             StatusText.Text = $"확인 완료: {installation.RootPath} ({installation.DiscoverySource})";
         }
         catch (Exception ex)
@@ -103,12 +109,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Render(XamppInstallation installation)
+    private async Task CheckOnlineVersionsAsync()
+    {
+        SetBusy(true, "공식 공급원에서 최신 버전을 확인하는 중...");
+
+        try
+        {
+            var catalog = await _onlineCatalog.GetLatestAsync();
+            RenderOnlineCatalog(catalog);
+            StatusText.Text = $"온라인 확인 완료: {catalog.CheckedAt:yyyy-MM-dd HH:mm:ss}";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"온라인 버전 확인 실패: {ex.Message}";
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private void RenderInstallation(XamppInstallation installation)
     {
         foreach (var component in installation.Components)
         {
             var versionText = component.IsInstalled
-                ? component.Version is null ? "설치됨 / 버전 확인 실패" : $"버전 {component.Version}"
+                ? component.Version is null ? "설치됨 / 버전 확인 실패" : $"설치 버전 {component.Version}"
                 : "감지되지 않음";
 
             switch (component.Type)
@@ -132,9 +158,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RenderOnlineCatalog(OnlineVersionCatalog catalog)
+    {
+        foreach (var component in catalog.Components)
+        {
+            var upstreamText = $"upstream 최신: {component.UpstreamLatestVersion ?? "확인 실패"}";
+            var xamppText = $"XAMPP 공식: {component.XamppBundledVersion ?? "확인 실패"}";
+
+            switch (component.Type)
+            {
+                case XamppComponentType.Apache:
+                    ApacheLatestText.Text = upstreamText;
+                    ApacheXamppText.Text = xamppText;
+                    ApacheCompatibilityText.Text = component.CompatibilityNote;
+                    break;
+                case XamppComponentType.Php:
+                    PhpLatestText.Text = upstreamText;
+                    PhpXamppText.Text = xamppText;
+                    PhpCompatibilityText.Text = component.CompatibilityNote;
+                    break;
+                case XamppComponentType.MariaDb:
+                    MariaDbLatestText.Text = upstreamText;
+                    MariaDbXamppText.Text = xamppText;
+                    MariaDbCompatibilityText.Text = component.CompatibilityNote;
+                    break;
+            }
+        }
+    }
+
     private void SetBusy(bool isBusy, string? message = null)
     {
         InstallPathComboBox.IsEnabled = !isBusy;
+        OnlineCheckButton.IsEnabled = !isBusy;
         if (message is not null)
         {
             StatusText.Text = message;
