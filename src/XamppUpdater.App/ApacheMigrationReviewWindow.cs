@@ -21,8 +21,14 @@ public sealed class ApacheMigrationReviewWindow : Window
 
     public ApacheMigrationReviewWindow(ApacheMigrationReviewResult review, string currentConfRoot)
     {
-        _automaticFiles = new Dictionary<string, string>(review.ProposedFiles, StringComparer.OrdinalIgnoreCase);
-        _workingFiles = new Dictionary<string, string>(review.ProposedFiles, StringComparer.OrdinalIgnoreCase);
+        _automaticFiles = review.ProposedFiles.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
+        _workingFiles = review.ProposedFiles.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
 
         Title = $"Apache 설정 마이그레이션 검토 - {review.CurrentVersion} → {review.TargetVersion}";
         Width = 1100;
