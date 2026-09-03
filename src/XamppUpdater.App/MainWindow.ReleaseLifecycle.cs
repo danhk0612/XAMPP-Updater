@@ -17,6 +17,7 @@ public partial class MainWindow
         _releaseLifecycleInitialized = true;
 
         InitializeSimplifiedUi();
+        InitializeRollbackUi();
         ApacheTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
         PhpTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
         MariaDbTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
@@ -43,6 +44,7 @@ public partial class MainWindow
                 _lastAutoInspectedPath = path;
                 await InspectPathAndOnlineAsync(path, "PathChanged");
                 UpdateCurrentVersionLabels();
+                RefreshRollbackUi();
             };
         }
 
@@ -59,7 +61,9 @@ public partial class MainWindow
         _lastAutoInspectedPath = _lastInstallation.RootPath;
         await CheckOnlineVersionsAsync();
         UpdateCurrentVersionLabels();
+        ApplyCurrentVersionOnlyDisplay();
         RefreshPrimaryUpdateButtons();
+        RefreshRollbackUi();
     }
 
     private void UpdateCurrentVersionLabels()
