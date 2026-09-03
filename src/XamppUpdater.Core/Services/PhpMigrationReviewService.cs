@@ -55,23 +55,16 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         CancellationToken cancellationToken = default)
     {
         if (target.Type != XamppComponentType.Php || package.Type != XamppComponentType.Php)
-        {
             throw new ArgumentException("PHP 마이그레이션 검토에는 PHP 대상과 패키지가 필요합니다.");
-        }
 
         var php = installation.Components.First(item => item.Type == XamppComponentType.Php);
         var currentVersion = php.Version ?? "Unknown";
         var finalPhpRoot = Path.Combine(installation.RootPath, "php");
         var currentIni = Path.Combine(finalPhpRoot, "php.ini");
         if (!File.Exists(currentIni))
-        {
             throw new FileNotFoundException("현재 php.ini를 찾을 수 없습니다.", currentIni);
-        }
-
         if (!File.Exists(package.PackagePath))
-        {
             throw new FileNotFoundException("준비된 PHP 패키지를 찾을 수 없습니다.", package.PackagePath);
-        }
 
         var reviewRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -97,9 +90,7 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
 
             var migration = _iniMigrationService.Migrate(currentIni, phpRoot, target.Version);
             if (!migration.Migrated || migration.IniPath is null || !File.Exists(migration.IniPath))
-            {
                 throw new InvalidOperationException("PHP 설정 마이그레이션 제안안을 만들지 못했습니다.");
-            }
 
             // 검토용 스테이징 경로는 검토 종료 시 삭제된다. 사용자가 확정하는 php.ini와
             // 검토 메시지에는 실제 업데이트 완료 후의 XAMPP PHP 경로만 노출/저장한다.
@@ -127,6 +118,24 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
                 items.Add(new PhpMigrationReviewItem(
                     IsMigrationWarningReviewRequired(normalizedWarning) ? PhpMigrationReviewKind.NeedsReview : PhpMigrationReviewKind.AutomaticChange,
                     normalizedWarning));
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var runtimeValidation = PhpTargetRuntimeValidator.Validate(phpRoot, migration.IniPath);
+            if (runtimeValidation.Valid)
+            {
+                items.Add(new PhpMigrationReviewItem(
+                    PhpMigrationReviewKind.AutomaticChange,
+                    $"새 PHP {target.Version} + 마이그레이션 php.ini 조합 사전 실행 검증 통과: php -v / php -m"));
+            }
+            else
+            {
+                var detail = runtimeValidation.Error;
+                if (!string.IsNullOrWhiteSpace(runtimeValidation.Output))
+                    detail += " / " + Compact(runtimeValidation.Output);
+                items.Add(new PhpMigrationReviewItem(
+                    PhpMigrationReviewKind.NeedsReview,
+                    $"새 PHP {target.Version} 사전 실행 검증 실패: {detail}"));
             }
 
             return new PhpMigrationReviewResult(
@@ -177,10 +186,7 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         var normalized = payloadEntry.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
         var payloadFile = Path.Combine(extractedRoot, normalized);
         if (!File.Exists(payloadFile))
-        {
             throw new InvalidDataException("압축 해제 후 php.exe를 찾을 수 없습니다.");
-        }
-
         return Path.GetDirectoryName(payloadFile) ?? extractedRoot;
     }
 
@@ -188,6 +194,12 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
     {
         if (!Directory.Exists(path)) return;
         try { Directory.Delete(path, recursive: true); } catch { }
+    }
+
+    private static string Compact(string value)
+    {
+        var normalized = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length <= 600 ? normalized : normalized[..600] + "...";
     }
 
     private sealed class IgnorePhpMigrationOverrideStore : IPhpMigrationOverrideStore
