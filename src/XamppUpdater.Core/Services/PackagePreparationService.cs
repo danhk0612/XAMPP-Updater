@@ -51,6 +51,17 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
         }
 
         var sourceUrl = target.PackageUrl;
+        if (IsDeferredApacheResolver(sourceUrl))
+        {
+            var candidate = await new CandidatePackageCatalogService()
+                .ResolveApacheVersionAsync(target.Version, profile, cancellationToken);
+            if (candidate.DownloadUrl is null)
+            {
+                throw new InvalidOperationException(candidate.Reason);
+            }
+            sourceUrl = candidate.DownloadUrl;
+        }
+
         var downloadUrl = await ResolveDownloadUrlAsync(target, sourceUrl, cancellationToken);
         var fileName = GetFileName(downloadUrl, target);
         var packageDirectory = Path.Combine(
@@ -124,6 +135,11 @@ public sealed partial class PackagePreparationService : IPackagePreparationServi
             inspection.PhpApacheModulePresent,
             warnings);
     }
+
+    internal static bool IsDeferredApacheResolver(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+        uri.Scheme.Equals("xampp-updater-resolve", StringComparison.OrdinalIgnoreCase) &&
+        uri.Host.Equals("apache", StringComparison.OrdinalIgnoreCase);
 
     internal static PackageArchiveInspection InspectArchive(
         string packagePath,

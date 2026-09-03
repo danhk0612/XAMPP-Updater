@@ -12,7 +12,7 @@ public sealed class LocalStorageCleanupService : ILocalStorageCleanupService
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "XamppUpdater");
 
-    private static readonly string[] ManagedDirectories = { "Backups", "Packages" };
+    private static readonly string[] ManagedDirectories = { "Backups", "Packages", "ExternalExtensions", "Runtime" };
 
     public LocalStorageUsage GetUsage()
     {

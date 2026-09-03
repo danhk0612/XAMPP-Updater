@@ -36,16 +36,24 @@ internal static class SelectableVersionCatalogSmoke
         var series = SelectableVersionCatalogService.ParseMariaDbSeries(
             "Community Server 10.4 (EOL) Community Server 10.11 Community Server 11.4 Community Server 12.3",
             "10.4.8");
-        AssertContains("MariaDB series 10.4", series.Select(item => item.Series), "10.4");
+        AssertNotContains("MariaDB EOL series filtered", series.Select(item => item.Series), "10.4");
+        AssertContains("MariaDB supported series 10.11", series.Select(item => item.Series), "10.11");
         AssertContains("MariaDB series 12.3", series.Select(item => item.Series), "12.3");
 
         var mariaDb = SelectableVersionCatalogService.ParseMariaDbSeriesVersions(
-            "Community Server 10.4.8 Community Server 10.4.32 Community Server 10.4.34",
+            "Community Server 10.11.8 Community Server 10.11.12 Community Server 10.11.14",
+            new SelectableVersionCatalogService.MariaDbSeriesEntry("10.11", false),
+            "10.4.8",
+            BinaryArchitecture.X64);
+        AssertEqual("MariaDB one latest per supported series", "1", mariaDb.Count.ToString());
+        AssertContains("MariaDB selectable 10.11.14", mariaDb.Select(item => item.Version), "10.11.14");
+
+        var eol = SelectableVersionCatalogService.ParseMariaDbSeriesVersions(
+            "Community Server 10.4.34",
             new SelectableVersionCatalogService.MariaDbSeriesEntry("10.4", true),
             "10.4.8",
             BinaryArchitecture.X64);
-        AssertEqual("MariaDB one latest per series", "1", mariaDb.Count.ToString());
-        AssertContains("MariaDB selectable 10.4.34", mariaDb.Select(item => item.Version), "10.4.34");
+        AssertEqual("MariaDB EOL version list filtered", "0", eol.Count.ToString());
     }
 
     private static void AssertContains(string name, IEnumerable<string> values, string expected)

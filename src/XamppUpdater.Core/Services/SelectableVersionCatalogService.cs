@@ -57,7 +57,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
                 XamppComponentType.Apache,
                 item.Value,
                 $"Apache {item.Parsed!.Major}.{item.Parsed.Minor}.x 최신",
-                null,
+                $"xampp-updater-resolve://apache/{item.Value}",
                 null))
             .ToArray();
     }
@@ -118,6 +118,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
                 match.Groups["series"].Value,
                 match.Groups["eol"].Success))
             .DistinctBy(item => item.Series, StringComparer.OrdinalIgnoreCase)
+            .Where(item => !item.IsEol)
             .Where(item =>
             {
                 var parsed = TryVersion(item.Series + ".0");
@@ -139,7 +140,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
         string? currentVersion,
         BinaryArchitecture architecture)
     {
-        if (architecture != BinaryArchitecture.X64)
+        if (architecture != BinaryArchitecture.X64 || series.IsEol)
         {
             return Array.Empty<SelectableVersionEntry>();
         }
@@ -163,10 +164,10 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
             new SelectableVersionEntry(
                 XamppComponentType.MariaDb,
                 latest.Value,
-                series.IsEol ? $"MariaDB {series.Series}.x 최신 (EOL)" : $"MariaDB {series.Series}.x 최신",
+                $"MariaDB {series.Series}.x 최신",
                 $"https://dlm.mariadb.com/browse/mariadb_server/{latest.Value}/winx64-packages/",
                 $"mariadb-{latest.Value}-winx64.zip",
-                series.IsEol)
+                false)
         };
     }
 
