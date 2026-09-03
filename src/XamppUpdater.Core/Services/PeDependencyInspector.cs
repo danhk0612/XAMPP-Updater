@@ -66,7 +66,24 @@ public static class PeDependencyInspector
             .ToArray();
         var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var missing = new List<PeMissingDependency>();
-        Walk(Path.GetFullPath(binaryPath), 0);
+        var fullBinaryPath = Path.GetFullPath(binaryPath);
+        Walk(fullBinaryPath, 0);
+
+        // Static PE dependency walking can prove that files exist, but it cannot prove that
+        // Windows can actually bind all imported entry points. When the static graph is clean,
+        // ask the Windows loader itself so ERROR_MOD_NOT_FOUND / ERROR_PROC_NOT_FOUND / BAD_EXE_FORMAT
+        // becomes visible in the migration review instead of a generic Apache "Cannot load" message.
+        if (missing.Count == 0 && OperatingSystem.IsWindows() && File.Exists(fullBinaryPath))
+        {
+            var probe = WindowsLoaderProbe.TryLoad(fullBinaryPath, directories);
+            if (!probe.Success)
+            {
+                missing.Add(new PeMissingDependency(
+                    fullBinaryPath,
+                    $"[Windows 로더 오류 {probe.ErrorCode}] {probe.Message}"));
+            }
+        }
+
         return missing
             .DistinctBy(item => item.BinaryPath + "|" + item.DependencyName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -91,6 +108,7 @@ public static class PeDependencyInspector
     public static string? FindAnywhere(string root, string fileName)
     {
         if (!Directory.Exists(root) || string.IsNullOrWhiteSpace(fileName)) return null;
+        if (fileName.StartsWith("[Windows 로더 오류", StringComparison.OrdinalIgnoreCase)) return null;
         try
         {
             return Directory.EnumerateFiles(root, fileName, SearchOption.AllDirectories).FirstOrDefault();
