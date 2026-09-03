@@ -26,7 +26,7 @@ public sealed record ConfigSnapshotRestoreResult(
     IReadOnlyList<string> Steps,
     string? Error = null);
 
-public sealed partial class ConfigSnapshotRestoreService
+public sealed partial class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
 {
     private readonly IConfigSnapshotService _snapshots;
     private readonly IWindowsServiceController _services;
