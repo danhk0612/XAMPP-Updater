@@ -62,7 +62,7 @@ public sealed class MariaDbCredentialsDialog : Window
             lock (CacheLock)
             {
                 _oneShotCredentials = _acceptedCredentials;
-                _oneShotExpiresAt = DateTimeOffset.UtcNow.AddMinutes(3);
+                _oneShotExpiresAt = DateTimeOffset.UtcNow.AddMinutes(30);
             }
             Close();
         };
