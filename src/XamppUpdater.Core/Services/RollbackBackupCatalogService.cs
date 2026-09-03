@@ -28,9 +28,9 @@ public sealed class RollbackBackupCatalogService : IRollbackBackupCatalogService
                 if (manifest is null || manifest.Type != type) continue;
                 if (!PathsEqual(manifest.XamppRoot, xamppRoot)) continue;
                 // 업데이트 전 백업은 CurrentVersion -> TargetVersion 관계를 기록한다.
-                // 현재 설치 버전이 당시 TargetVersion과 같을 때만 해당 백업으로 롤백할 수 있다.
+                // 현재 설치 버전이 당시 TargetVersion과 같고, 백업 버전이 더 낮을 때만 롤백 후보로 사용한다.
                 if (!string.Equals(manifest.TargetVersion, currentVersion, StringComparison.OrdinalIgnoreCase)) continue;
-                if (string.Equals(manifest.CurrentVersion, currentVersion, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!IsOlder(manifest.CurrentVersion, currentVersion)) continue;
 
                 var filesRoot = Path.Combine(manifest.BackupRoot, "files");
                 if (!Directory.Exists(filesRoot)) continue;
@@ -53,6 +53,11 @@ public sealed class RollbackBackupCatalogService : IRollbackBackupCatalogService
 
     public BackupResult? FindLatestCandidate(string xamppRoot, XamppComponentType type, string currentVersion) =>
         ListCandidates(xamppRoot, type, currentVersion).FirstOrDefault();
+
+    private static bool IsOlder(string candidate, string current) =>
+        Version.TryParse(candidate, out var oldVersion) &&
+        Version.TryParse(current, out var currentVersion) &&
+        oldVersion < currentVersion;
 
     private static bool PathsEqual(string left, string right)
     {
