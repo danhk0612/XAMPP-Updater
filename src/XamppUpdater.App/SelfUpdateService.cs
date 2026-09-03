@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -35,9 +36,10 @@ internal sealed class SelfUpdateService
         }
     }
 
-    public async Task<AppUpdateInfo?> CheckLatestAsync(CancellationToken cancellationToken = default)
+    public async Task<(AppUpdateInfo? Update, bool ReleaseExists)> CheckLatestAsync(CancellationToken cancellationToken = default)
     {
         using var response = await HttpClient.GetAsync(LatestReleaseApi, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return (null, false);
         response.EnsureSuccessStatusCode();
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -48,7 +50,7 @@ internal sealed class SelfUpdateService
         if (!TryParseTagVersion(tagName, out var releaseVersion))
             throw new InvalidOperationException($"GitHub 최신 릴리스 버전을 해석할 수 없습니다: {tagName ?? "(없음)"}");
 
-        if (releaseVersion <= CurrentVersion) return null;
+        if (releaseVersion <= CurrentVersion) return (null, true);
 
         Uri? executableUri = null;
         Uri? checksumUri = null;
@@ -71,7 +73,7 @@ internal sealed class SelfUpdateService
             ? htmlUrl.GetString() ?? string.Empty
             : string.Empty;
 
-        return new AppUpdateInfo(releaseVersion, tagName!, executableUri, checksumUri, releasePageUrl);
+        return (new AppUpdateInfo(releaseVersion, tagName!, executableUri, checksumUri, releasePageUrl), true);
     }
 
     public async Task<string> DownloadAsync(
