@@ -85,7 +85,6 @@ internal static class AdministratorPrivilege
         string? resumeRollbackComponent)
     {
         var processPath = Environment.ProcessPath ?? throw new InvalidOperationException("현재 실행 파일 경로를 확인할 수 없습니다.");
-        var entryPath = Assembly.GetEntryAssembly()?.Location ?? throw new InvalidOperationException("애플리케이션 DLL 경로를 확인할 수 없습니다.");
         var start = new ProcessStartInfo
         {
             UseShellExecute = true,
@@ -95,11 +94,15 @@ internal static class AdministratorPrivilege
 
         if (string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
         {
+            var entryPath = Assembly.GetEntryAssembly()?.Location;
+            if (string.IsNullOrWhiteSpace(entryPath))
+                throw new InvalidOperationException("dotnet 실행 모드의 애플리케이션 DLL 경로를 확인할 수 없습니다.");
             start.FileName = processPath;
             start.ArgumentList.Add(entryPath);
         }
         else
         {
+            // Published/self-contained/single-file builds relaunch the current EXE directly.
             start.FileName = processPath;
         }
 
