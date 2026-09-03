@@ -83,13 +83,12 @@
                     <TextBlock Text="탐색기로 열기" Foreground="DimGray" Margin="4,0,0,6" />
                     <Button Content="롤백 백업" Tag="Backups" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
                     <Button Content="설정 이력 폴더" Tag="ConfigHistory" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
-                    <Button Content="패키지/임시 폴더" Tag="LocalRoot" Padding="8,5" Click="OpenStorageFolder_Click" />
+                    <Button Content="캐시/임시 데이터" Tag="LocalRoot" Padding="8,5" Click="OpenStorageFolder_Click" />
                 </StackPanel>
             </Border>
 
             <Border Grid.Column="2" BorderBrush="#D8D8D8" BorderThickness="1" CornerRadius="6" Padding="18">
                 <Grid>
-                    <!-- Apache -->
                     <StackPanel x:Name="ApachePanel">
                         <TextBlock Text="Apache" FontSize="21" FontWeight="SemiBold" />
                         <TextBlock Margin="0,18,0,3" Foreground="DimGray" Text="현재 버전" />
@@ -122,7 +121,6 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- PHP -->
                     <StackPanel x:Name="PhpPanel" Visibility="Collapsed">
                         <TextBlock Text="PHP" FontSize="21" FontWeight="SemiBold" />
                         <TextBlock Margin="0,18,0,3" Foreground="DimGray" Text="현재 버전" />
@@ -154,7 +152,6 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- MariaDB -->
                     <StackPanel x:Name="MariaDbPanel" Visibility="Collapsed">
                         <TextBlock Text="MariaDB" FontSize="21" FontWeight="SemiBold" />
                         <TextBlock Margin="0,18,0,3" Foreground="DimGray" Text="현재 버전" />
@@ -201,7 +198,7 @@
                     <TextBox x:Name="ActivityLogTextBox" Grid.Row="1" IsReadOnly="True" AcceptsReturn="True"
                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
                              FontFamily="Consolas" FontSize="12" TextWrapping="NoWrap" BorderThickness="0" />
-                    <Button Grid.Row="2" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="12,5" Content="최근 로그 파일 열기" Click="OpenSelectedRecentLog_Click" />
+                    <Button Grid.Row="2" HorizontalAlignment="Right" Margin="0,8,0,0" Padding="12,5" Content="최근 작업 로그 열기" Click="OpenSelectedRecentLog_Click" />
                 </Grid>
             </Border>
         </Grid>
