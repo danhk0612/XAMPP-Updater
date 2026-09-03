@@ -29,7 +29,10 @@ public sealed class VerifiedPhpUpdateExecutor : IPhpUpdateExecutor
         }
         catch (Exception ex) { snapshotWarnings.Add("업데이트 전 설정 snapshot 저장 실패: " + ex.Message); }
 
-        var result = await _inner.ExecuteAsync(installation, target, package, backup, cancellationToken);
+        var result = await UpdateExecutionWatchdog.ExecuteAsync(
+            token => _inner.ExecuteAsync(installation, target, package, backup, token),
+            TimeSpan.FromMinutes(10),
+            cancellationToken);
         if (result.Success)
         {
             try
