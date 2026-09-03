@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Security.Principal;
 using System.Windows;
@@ -79,7 +80,7 @@ internal static class AdministratorPrivilege
             start.ArgumentList.Add(Path.GetFullPath(xamppRoot));
         }
 
-        Process.Start(start) ?? throw new InvalidOperationException("관리자 권한 프로세스를 시작하지 못했습니다.");
+        _ = Process.Start(start) ?? throw new InvalidOperationException("관리자 권한 프로세스를 시작하지 못했습니다.");
     }
 
     public static string? GetStartupXamppRoot()
