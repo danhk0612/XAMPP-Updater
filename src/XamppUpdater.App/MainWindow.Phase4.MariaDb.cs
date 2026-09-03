@@ -168,6 +168,8 @@ public partial class MainWindow
             return;
         }
 
+        if (!AdministratorPrivilege.EnsureElevated(this, installation.RootPath, "MariaDB 실제 업데이트")) return;
+
         var credentials = await MariaDbCredentialsDialog.RequestAsync(this);
         if (credentials is null)
         {
