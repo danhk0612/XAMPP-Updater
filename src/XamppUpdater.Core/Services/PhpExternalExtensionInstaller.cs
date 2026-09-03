@@ -66,6 +66,7 @@ public sealed partial class PhpExternalExtensionInstaller : IPhpExternalExtensio
                 var result = await TryInstallFromPeclAsync(
                     packageName,
                     phpSeries,
+                    targetVersion,
                     threadSafe,
                     architecture,
                     newPhpRoot,
@@ -92,6 +93,7 @@ public sealed partial class PhpExternalExtensionInstaller : IPhpExternalExtensio
     private static async Task<string?> TryInstallFromPeclAsync(
         string packageName,
         string phpSeries,
+        string targetVersion,
         bool threadSafe,
         BinaryArchitecture architecture,
         string phpRoot,
@@ -144,16 +146,57 @@ public sealed partial class PhpExternalExtensionInstaller : IPhpExternalExtensio
             throw new InvalidDataException("다운로드한 PECL 확장 DLL 아키텍처가 현재 PHP와 다릅니다.");
         }
 
-        foreach (var entry in archive.Entries.Where(entry => entry.Length > 0 && entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+        var createdFiles = new List<string>();
+        try
         {
-            var fileName = Path.GetFileName(entry.FullName);
-            if (string.IsNullOrWhiteSpace(fileName)) continue;
-            var destinationRoot = fileName.StartsWith("php_", StringComparison.OrdinalIgnoreCase) ? extRoot : phpRoot;
-            var destination = Path.Combine(destinationRoot, fileName);
-            entry.ExtractToFile(destination, overwrite: true);
-        }
+            foreach (var entry in archive.Entries.Where(entry => entry.Length > 0 && entry.FullName.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)))
+            {
+                var fileName = Path.GetFileName(entry.FullName);
+                if (string.IsNullOrWhiteSpace(fileName)) continue;
+                var isExtension = fileName.StartsWith("php_", StringComparison.OrdinalIgnoreCase);
+                var destinationRoot = isExtension ? extRoot : phpRoot;
+                var destination = Path.Combine(destinationRoot, fileName);
 
-        return Path.GetFileName(extensionEntry.FullName);
+                // PECL dependency DLLs must never replace a DLL supplied by the target PHP package.
+                // A name collision is resolved in favor of the target PHP runtime and validated below.
+                if (File.Exists(destination))
+                {
+                    if (isExtension && string.Equals(fileName, Path.GetFileName(extensionEntry.FullName), StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException($"복원 대상 extension DLL이 이미 존재합니다: {fileName}");
+                    continue;
+                }
+
+                entry.ExtractToFile(destination, overwrite: false);
+                createdFiles.Add(destination);
+            }
+
+            var extensionName = Path.GetFileName(extensionEntry.FullName);
+            var extensionPath = Path.Combine(extRoot, extensionName);
+            if (!File.Exists(extensionPath))
+                throw new FileNotFoundException("PECL extension DLL을 스테이징 ext 디렉터리에 배치하지 못했습니다.", extensionPath);
+
+            var compatibility = PhpExtensionCompatibilityValidator.Validate(
+                extensionPath,
+                phpRoot,
+                targetVersion,
+                threadSafe,
+                architecture);
+            if (!compatibility.Compatible)
+            {
+                throw new InvalidDataException(
+                    "PECL extension 호환성 사전검증 실패: " + string.Join(" / ", compatibility.Diagnostics));
+            }
+
+            return extensionName;
+        }
+        catch
+        {
+            foreach (var path in createdFiles.AsEnumerable().Reverse())
+            {
+                try { if (File.Exists(path)) File.Delete(path); } catch { }
+            }
+            throw;
+        }
     }
 
     internal static string? ParseLatestStableRelease(string html)
