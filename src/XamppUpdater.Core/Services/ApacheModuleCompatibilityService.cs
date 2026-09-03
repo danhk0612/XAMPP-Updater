@@ -54,7 +54,7 @@ public sealed partial class ApacheModuleCompatibilityService : IApacheModuleComp
                     modules.Add(Path.GetRelativePath(targetApacheRoot, targetModule).Replace('\\', '/'));
                 }
 
-                PreserveDependencies(sourceApacheRoot, targetApacheRoot, targetModule, dependencies, unresolved);
+                unresolved.AddRange(PreserveDependencies(sourceApacheRoot, targetApacheRoot, targetModule, dependencies));
             }
         }
 
@@ -64,34 +64,25 @@ public sealed partial class ApacheModuleCompatibilityService : IApacheModuleComp
             unresolved.Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
     }
 
-    private static void PreserveDependencies(
+    private static IReadOnlyList<string> PreserveDependencies(
         string sourceApacheRoot,
         string targetApacheRoot,
         string modulePath,
-        ICollection<string> preserved,
-        ICollection<string> unresolved)
+        ICollection<string> preserved)
     {
-        // Re-evaluate after each copy because one preserved runtime DLL can itself expose another dependency.
+        // Re-evaluate after each copy because a preserved runtime DLL can expose another dependency.
         for (var pass = 0; pass < 6; pass++)
         {
-            var searchDirectories = GetDependencySearchDirectories(targetApacheRoot, modulePath);
-            var missing = PeDependencyInspector.FindMissingDependencies(modulePath, searchDirectories);
+            var missing = PeDependencyInspector.FindMissingDependencies(
+                modulePath,
+                GetDependencySearchDirectories(targetApacheRoot, modulePath));
             var copiedAny = false;
 
             foreach (var item in missing)
             {
-                if (item.DependencyName.StartsWith("[Windows 로더 오류", StringComparison.OrdinalIgnoreCase))
-                {
-                    unresolved.Add($"{Path.GetFileName(modulePath)}: {item.DependencyName}");
-                    continue;
-                }
-
+                if (item.DependencyName.StartsWith("[Windows 로더 오류", StringComparison.OrdinalIgnoreCase)) continue;
                 var source = PeDependencyInspector.FindAnywhere(sourceApacheRoot, item.DependencyName);
-                if (source is null)
-                {
-                    unresolved.Add($"{Path.GetFileName(modulePath)} → {item.DependencyName}");
-                    continue;
-                }
+                if (source is null) continue;
 
                 var destination = Path.Combine(targetApacheRoot, "bin", item.DependencyName);
                 if (File.Exists(destination)) continue;
@@ -102,16 +93,16 @@ public sealed partial class ApacheModuleCompatibilityService : IApacheModuleComp
             }
 
             if (!copiedAny) break;
-            unresolved.Clear();
         }
 
-        var finalMissing = PeDependencyInspector.FindMissingDependencies(modulePath, GetDependencySearchDirectories(targetApacheRoot, modulePath));
-        foreach (var item in finalMissing)
-        {
-            unresolved.Add(item.DependencyName.StartsWith("[Windows 로더 오류", StringComparison.OrdinalIgnoreCase)
+        return PeDependencyInspector.FindMissingDependencies(
+                modulePath,
+                GetDependencySearchDirectories(targetApacheRoot, modulePath))
+            .Select(item => item.DependencyName.StartsWith("[Windows 로더 오류", StringComparison.OrdinalIgnoreCase)
                 ? $"{Path.GetFileName(modulePath)}: {item.DependencyName}"
-                : $"{Path.GetFileName(modulePath)} → {item.DependencyName}");
-        }
+                : $"{Path.GetFileName(modulePath)} → {item.DependencyName}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
     private static IReadOnlyList<string> GetDependencySearchDirectories(string apacheRoot, string module)
