@@ -36,8 +36,11 @@ jobs:
           if (-not (Test-Path $exe)) { throw "Published executable not found: $exe" }
           $item = Get-Item $exe
           if ($item.Length -le 0) { throw 'Published executable is empty.' }
+          [xml]$props = Get-Content '.\Directory.Build.props'
+          $expectedVersion = [string]$props.Project.PropertyGroup.VersionPrefix
+          if ([string]::IsNullOrWhiteSpace($expectedVersion)) { throw 'VersionPrefix not found in Directory.Build.props.' }
           $version = $item.VersionInfo.ProductVersion
-          if (-not $version.StartsWith('0.1.0')) { throw "Unexpected product version: $version" }
+          if (-not $version.StartsWith($expectedVersion)) { throw "Unexpected product version: $version / expected $expectedVersion" }
           Write-Host "Published: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB / version $version"
       - name: Prepare release checksum
         if: startsWith(github.ref, 'refs/tags/v')
