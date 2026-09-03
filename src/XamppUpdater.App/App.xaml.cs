@@ -1,4 +1,3 @@
-using System.IO;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Threading;
@@ -17,14 +16,16 @@ public partial class App : Application
 
             try
             {
-                var assemblyPath = Assembly.GetExecutingAssembly().Location;
-                var buildTime = File.GetLastWriteTime(assemblyPath);
+                var version = Assembly.GetEntryAssembly()?.GetName().Version;
+                var displayVersion = version is null
+                    ? "unknown"
+                    : $"{version.Major}.{version.Minor}.{version.Build}";
                 var privilege = AdministratorPrivilege.IsElevated ? "Admin" : "Standard";
-                window.Title = $"XAMPP Updater - Build {buildTime:yyyy-MM-dd HH:mm:ss} [{privilege}]";
+                window.Title = $"XAMPP Updater {displayVersion} [{privilege}]";
             }
             catch
             {
-                window.Title = "XAMPP Updater - Build unknown";
+                window.Title = "XAMPP Updater [version unknown]";
             }
 
             if (window is MainWindow mainWindow)
