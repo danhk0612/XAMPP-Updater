@@ -16,6 +16,7 @@ public sealed record ConfigSnapshotRestoreResult(
     bool Success,
     bool RolledBack,
     string? SafetySnapshotPath,
+    string? AfterRestoreSnapshotPath,
     IReadOnlyList<string> Steps,
     string? Error = null);
 
@@ -39,6 +40,7 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
     {
         var steps = new List<string>();
         ConfigSnapshotManifest? safety = null;
+        ConfigSnapshotManifest? afterRestore = null;
         var serviceName = ResolveServiceName(installation, snapshot.Type);
         var serviceWasRunning = false;
         var serviceStopped = false;
@@ -47,7 +49,12 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
         {
             ValidateSnapshot(installation, snapshot);
             var currentVersion = installation.Components.FirstOrDefault(item => item.Type == snapshot.Type)?.Version;
-            safety = _snapshots.Capture(installation.RootPath, snapshot.Type, currentVersion, "BeforeRestore");
+            safety = _snapshots.Capture(
+                installation.RootPath,
+                snapshot.Type,
+                currentVersion,
+                "BeforeRestore",
+                $"복원 대상: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {snapshot.Stage}");
             steps.Add("복원 직전 안전 snapshot 저장: " + safety.ManifestPath);
 
             if (!string.IsNullOrWhiteSpace(serviceName))
@@ -75,7 +82,29 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
                 steps.Add("서비스 재시작 및 RUNNING 확인: " + serviceName);
             }
 
-            return new ConfigSnapshotRestoreResult(true, false, safety.ManifestPath, steps);
+            try
+            {
+                afterRestore = _snapshots.Capture(
+                    installation.RootPath,
+                    snapshot.Type,
+                    currentVersion,
+                    "AfterRestore",
+                    $"복원 원본: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {snapshot.Stage}" +
+                    (string.IsNullOrWhiteSpace(snapshot.Note) ? string.Empty : $" / {snapshot.Note}"));
+                steps.Add("복원 후 설정 snapshot 저장: " + afterRestore.ManifestPath);
+            }
+            catch (Exception captureEx)
+            {
+                // 설정 적용/검증 자체가 성공한 뒤의 이력 저장 실패는 복원 실패로 취급하지 않는다.
+                steps.Add("주의: 복원 후 설정 snapshot 저장 실패: " + captureEx.Message);
+            }
+
+            return new ConfigSnapshotRestoreResult(
+                true,
+                false,
+                safety.ManifestPath,
+                afterRestore?.ManifestPath,
+                steps);
         }
         catch (Exception ex)
         {
@@ -112,7 +141,13 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
                 }
             }
 
-            return new ConfigSnapshotRestoreResult(false, rolledBack, safety?.ManifestPath, steps, error);
+            return new ConfigSnapshotRestoreResult(
+                false,
+                rolledBack,
+                safety?.ManifestPath,
+                null,
+                steps,
+                error);
         }
         finally
         {
