@@ -6,7 +6,7 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 
 ## 현재 개발 단계
 
-**Phase 6 — Packaging & Release 진행 중**입니다.
+**Phase 6 — Packaging & Release 최종 검증 단계**입니다.
 
 핵심 업데이트 엔진과 설정 복원 기능은 구현되어 있으며 Windows 11 테스트 환경에서 다음 실제 업데이트를 확인했습니다.
 
@@ -16,6 +16,8 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - MariaDB 10.4.8 → 10.4.34
 - MariaDB 10.4.34 → 10.6.28
 - MariaDB 10.6.28 → 12.3.3
+
+릴리스 파이프라인에서는 `v0.1.0`과 `v0.1.1` 공개 GitHub Release를 실제 생성했고, 두 버전 모두 `XAMPP-Updater.exe`와 `XAMPP-Updater.exe.sha256` 게시를 확인했습니다. 현재 GitHub `latest release`는 `v0.1.1`입니다.
 
 ## 주요 기능
 
@@ -38,10 +40,10 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - GitHub Release 기반 앱 자체 업데이트 구현
   - 새 EXE와 SHA256 검증 파일 다운로드
   - 다운로드 중 진행률/용량 표시 및 취소
-  - 검증 후 현재 EXE 교체 및 자동 재시작
+  - SHA256 검증 후 현재 EXE 교체 및 자동 재시작
   - 교체 실패 시 `.update-backup` 복원
 
-앱 자체 업데이트의 실제 태그 릴리스 왕복 검증은 Phase 6 최종 검증 항목으로 남아 있습니다.
+남은 Phase 6 최종 검증은 Windows에서 실제 `v0.1.0` 배포 EXE를 실행해 `v0.1.1`로 자체 업데이트하는 왕복 테스트입니다.
 
 ## 범위
 
@@ -81,7 +83,9 @@ dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj `
 
 생성되는 주 실행 파일은 `XAMPP-Updater.exe`입니다.
 
-GitHub Actions는 branch/PR 빌드에서 restore, build, smoke tests, self-contained publish, EXE 검증과 artifact 업로드를 수행합니다. `v*` 태그 빌드에서는 추가로 `XAMPP-Updater.exe.sha256`을 생성하고 GitHub Release에 EXE와 SHA256 파일을 게시하도록 구성되어 있습니다.
+GitHub Actions는 branch/PR 빌드에서 restore, build, smoke tests, self-contained publish, EXE 검증과 artifact 업로드를 수행합니다. `v*` 태그 또는 `release/v*` 릴리스 브랜치에서는 추가로 `XAMPP-Updater.exe.sha256`을 생성하고 GitHub Release에 EXE와 SHA256 파일을 게시하도록 구성되어 있습니다.
+
+`release/v0.1.0`과 `release/v0.1.1` 경로로 실제 공개 Release 게시를 검증했습니다. GitHub Actions의 `GITHUB_TOKEN`이 생성한 태그는 재귀 workflow 실행을 발생시키지 않으므로, 해당 릴리스 브랜치가 생성한 태그에서 별도의 tag-trigger run은 생성되지 않습니다.
 
 ## 진단 정보 내보내기
 
