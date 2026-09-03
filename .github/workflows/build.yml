@@ -27,11 +27,13 @@ jobs:
       - name: Verify published executable
         shell: pwsh
         run: |
-          $exe = '.\artifacts\win-x64\XamppUpdater.App.exe'
+          $exe = '.\artifacts\win-x64\XAMPP-Updater.exe'
           if (-not (Test-Path $exe)) { throw "Published executable not found: $exe" }
           $item = Get-Item $exe
           if ($item.Length -le 0) { throw 'Published executable is empty.' }
-          Write-Host "Published: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB"
+          $version = $item.VersionInfo.ProductVersion
+          if (-not $version.StartsWith('0.1.0')) { throw "Unexpected product version: $version" }
+          Write-Host "Published: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB / version $version"
       - name: Upload win-x64 artifact
         uses: actions/upload-artifact@v4
         with:
