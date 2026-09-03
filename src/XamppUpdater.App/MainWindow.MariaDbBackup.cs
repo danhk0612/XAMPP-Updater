@@ -17,23 +17,18 @@ public partial class MainWindow
         MariaDbBackupButton.Click += MariaDbSafeBackupButton_Click;
         InitializePhase4Ui();
         InitializePhpMigrationReviewUi();
+        InitializeMariaDbPhase4Ui();
     }
 
     private async void MariaDbSafeBackupButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_mariaDbBackupRunning)
-        {
-            return;
-        }
+        if (_mariaDbBackupRunning) return;
 
         if (!TryGetActionTarget(sender, out var type, out var target) ||
-            type != XamppComponentType.MariaDb ||
-            _lastInstallation is null)
-        {
-            return;
-        }
+            type != XamppComponentType.MariaDb || _lastInstallation is null) return;
 
         _mariaDbBackupRunning = true;
+        RefreshMariaDbExecuteEnabled();
         SetBusy(true, "MariaDB 논리/물리 롤백 백업을 생성하는 중...");
         var serviceWasRunning = false;
         var serviceStoppedByUpdater = false;
@@ -44,14 +39,11 @@ public partial class MainWindow
             _preflightReports[type] = report;
 
             if (!CanRunMariaDbSafeBackup(report))
-            {
                 throw new InvalidOperationException(
                     "MariaDB 프로세스가 실행 중이지만 관리 가능한 Windows 서비스를 찾지 못했습니다. 안전한 물리 백업을 위해 먼저 MariaDB를 중지해야 합니다.");
-            }
 
             LogicalBackupManifest? logicalManifest = null;
-            var isRunning = report.ProcessRunning ||
-                            report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
+            var isRunning = report.ProcessRunning || report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
 
             if (isRunning)
             {
@@ -64,26 +56,19 @@ public partial class MainWindow
                         StatusText.Text = "MariaDB 백업 취소: 인증정보 입력이 취소되었습니다.";
                         return;
                     }
-
                     logical = await _mariaDbLogicalBackupService.CreateAsync(report, credentials);
                 }
 
                 if (!logical.Success || logical.FilePath is null || logical.Sha256 is null)
-                {
-                    throw new InvalidOperationException(
-                        "MariaDB 논리 백업 실패: " +
+                    throw new InvalidOperationException("MariaDB 논리 백업 실패: " +
                         (string.IsNullOrWhiteSpace(logical.ErrorText) ? "dump 명령이 실패했습니다." : logical.ErrorText));
-                }
 
                 logicalManifest = new LogicalBackupManifest(
-                    Path.GetRelativePath(report.BackupDestination, logical.FilePath),
-                    logical.Size,
-                    logical.Sha256);
+                    Path.GetRelativePath(report.BackupDestination, logical.FilePath), logical.Size, logical.Sha256);
                 AppendDetail(type, $"논리 백업 완료: {FormatBytes(logical.Size)} / SHA256 {logical.Sha256}");
             }
 
-            serviceWasRunning = report.ServiceName is not null &&
-                                report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
+            serviceWasRunning = report.ServiceName is not null && report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
             if (serviceWasRunning)
             {
                 StatusText.Text = $"MariaDB 논리 백업 완료. 서비스 {report.ServiceName} 중지 중...";
@@ -108,8 +93,7 @@ public partial class MainWindow
         finally
         {
             if (serviceStoppedByUpdater && serviceWasRunning &&
-                _preflightReports.TryGetValue(type, out var report) &&
-                report.ServiceName is not null)
+                _preflightReports.TryGetValue(type, out var report) && report.ServiceName is not null)
             {
                 try
                 {
@@ -131,16 +115,14 @@ public partial class MainWindow
             _mariaDbBackupRunning = false;
             SetBusy(false);
             if (_preflightReports.TryGetValue(type, out var latestReport))
-            {
                 SetBackupEnabled(type, CanRunMariaDbSafeBackup(latestReport));
-            }
+            RefreshMariaDbExecuteEnabled();
         }
     }
 
     private static bool CanRunMariaDbSafeBackup(UpdatePreflightReport report)
     {
-        var running = report.ProcessRunning ||
-                      report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
+        var running = report.ProcessRunning || report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
         return !running || report.ServiceName is not null;
     }
 }
