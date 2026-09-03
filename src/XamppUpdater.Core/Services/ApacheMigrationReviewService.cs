@@ -285,12 +285,23 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
                 $"{relativeModule} 직접 종속 DLL: {string.Join(", ", imports)}"));
         }
 
-        var missing = PeDependencyInspector.FindMissingDependencies(module, GetDependencySearchDirectories(stagedRoot, module));
+        var searchDirectories = GetDependencySearchDirectories(stagedRoot, module);
+        var missing = PeDependencyInspector.FindMissingDependencies(module, searchDirectories);
         if (missing.Count == 0)
         {
-            items.Add(new ApacheMigrationReviewItem(
-                ApacheMigrationReviewKind.NeedsReview,
-                $"{relativeModule} 파일과 PE 직접/연쇄 종속 DLL은 확인됐지만 Windows 로더가 모듈을 로드하지 못했습니다. 다음 단계에서 ABI/로더 오류를 추가 확인해야 합니다."));
+            var probe = WindowsLoaderProbe.TryLoad(module, searchDirectories);
+            if (probe.Success)
+            {
+                items.Add(new ApacheMigrationReviewItem(
+                    ApacheMigrationReviewKind.NeedsReview,
+                    $"{relativeModule} Windows LoadLibraryEx 직접 로드는 성공했습니다. httpd.exe 내부 로딩 경로/Apache 모듈 ABI 문제를 추가 확인해야 합니다."));
+            }
+            else
+            {
+                items.Add(new ApacheMigrationReviewItem(
+                    ApacheMigrationReviewKind.NeedsReview,
+                    $"{relativeModule} Windows 로더 직접 진단 실패: Win32 오류 {probe.ErrorCode} / {probe.Message}"));
+            }
             return;
         }
 
