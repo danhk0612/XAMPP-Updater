@@ -57,7 +57,7 @@ public sealed partial class SelectableVersionCatalogService : ISelectableVersion
                 XamppComponentType.Apache,
                 item.Value,
                 $"Apache {item.Parsed!.Major}.{item.Parsed.Minor}.x 최신",
-                null,
+                $"xampp-updater-resolve://apache/{item.Value}",
                 null))
             .ToArray();
     }
