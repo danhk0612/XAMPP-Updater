@@ -4,6 +4,8 @@
 
 Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB만** 안전하게 관리한다.
 
+핵심 우선순위는 **최대한 자동화된 안전한 업데이트 → 실패 시 자동 롤백 → 업데이트 후 문제 발생 시 정상 상태 복원**이다. 설정 비교/복원 기능은 이 목적을 보조하는 범위까지만 유지하며, 별도 설정 관리 도구 수준으로 확장하지 않는다.
+
 - 설치 위치: 자동 감지 + 직접 지정
 - Windows 서비스명: 실제 시스템에서 감지
 - 현재 버전 확인
@@ -94,6 +96,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] deprecated 설정 자동 비활성화
 - [x] VC++ Runtime 자동 확인/설치
 - [x] php -v / php -m / httpd -t 검증
+- [x] 실제 교체 전에 새 PHP + 마이그레이션 php.ini + 외부 extension 조합 php -v / php -m 사전검증
 - [x] PHP 7.3.11 → 8.5.10 실제 환경 업데이트 성공
 - [x] PHP 8.2.12 → 8.5.10 실제 환경 업데이트 성공
 
@@ -123,6 +126,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 서비스 기동 후 mariadb-upgrade/mysql_upgrade
 - [x] 업그레이드 인증정보 일회성 option 파일 처리
 - [x] 마이그레이션 검토 UI
+- [x] 대상 MariaDB 바이너리로 현재 my.ini/my.cnf 사전 파싱 검사
 - [x] 동일 계열 패치 업데이트
 - [x] 직접 major 업그레이드
 - [x] MariaDB 10.4.8 → 10.4.34 실제 환경 성공
@@ -138,13 +142,14 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 실제 교체 직전 백업 파일 크기/SHA256 재검증
 - [x] 일반 권한에서는 검사/비교 가능, 서비스 제어가 필요한 실제 작업에서만 UAC 승격 재실행
 - [x] 승격 재실행 시 현재 XAMPP 경로 전달
-- [ ] 장시간 외부 프로세스 실행에 일관된 timeout 적용
+- [x] 업데이트가 생성한 자식 프로세스의 사용자 취소/장시간 무응답 watchdog 및 프로세스 트리 종료
+- [x] Windows 서비스 START_PENDING/STOP_PENDING 경쟁 상태 안전 처리 및 상세 실패 진단
 - [ ] 단계별 실시간 진행 callback 통일
 - [ ] 외부 모듈/extension ABI 및 의존성 판정 강화
 
 ## Phase 5 — Config Compare / Restore
 
-핵심 snapshot 비교/복원 기능 구현 및 실제 Apache 복원 검증 완료. 선택 병합 기능을 남겨둔다.
+핵심 snapshot 비교/복원 기능 구현 및 실제 Apache 복원 검증 완료. 이 단계는 업데이트 실패/사후 문제 복원을 보조하는 수준으로 유지하며 추가적인 범용 설정 관리 기능은 확장하지 않는다.
 
 - [x] 업데이트 전/후 설정 snapshot 자동 저장
 - [x] 수동 현재 설정 snapshot + 사용자 메모
@@ -153,18 +158,15 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 업데이트/복원 이력별 설정 비교
 - [x] DiffPlex 기반 좌우 내용 diff, 변경 강조/줄 번호/차이 이동
 - [x] 현재 설정과 과거 snapshot 즉시 비교
-- [x] snapshot 메모 수정/삭제/폴더 열기
+- [x] snapshot 메모 수정/다중 삭제/다중 무결성 검사/폴더 열기
 - [x] 이전 snapshot 전체 설정 복원
-- [x] 복원 직전 BeforeRestore 안전 snapshot
-- [x] 복원 성공 후 AfterRestore 이력 snapshot
+- [x] 파일 단위 선택 복원
+- [x] 안전하게 식별 가능한 ini/conf 항목 단위 선택 병합
+- [x] 중복 키/directive·문맥 의존 항목은 자동 적용하지 않고 수동 확인 대상으로 분류
+- [x] 복원 직전 안전 snapshot 및 복원 후 이력 snapshot
 - [x] Apache httpd -t / PHP php -v / MariaDB 설정 파싱 검증
 - [x] 실행 중이던 서비스의 중지/재시작 및 실패 시 자동 원복
 - [x] Apache 설정 snapshot 실제 복원 성공 확인
-- [x] 기존 사용자 설정과 신규 기본값 분리 표시(업데이트 마이그레이션 검토)
-- [x] 변경/추가/삭제 설정 파일 식별
-- [ ] 파일 단위 선택 복원/병합
-- [ ] ini/conf 항목 단위 선택 병합
-- [ ] 충돌 항목 사용자 선택 후 적용
 
 ## Phase 6 — Packaging & Release
 
