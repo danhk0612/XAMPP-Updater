@@ -24,13 +24,18 @@ internal static class AdministratorPrivilege
         }
     }
 
-    public static bool EnsureElevated(Window owner, string? xamppRoot, string action)
+    public static bool EnsureElevated(
+        Window owner,
+        string? xamppRoot,
+        string action,
+        string? resumeComponent = null,
+        string? resumeVersion = null)
     {
         if (IsElevated) return true;
 
         var answer = MessageBox.Show(
             owner,
-            $"{action}에는 Windows 관리자 권한이 필요합니다.\n\n관리자 권한으로 XAMPP Updater를 다시 실행하시겠습니까?\n현재 XAMPP 경로는 새 창으로 전달됩니다.",
+            $"{action}에는 Windows 관리자 권한이 필요합니다.\n\n관리자 권한으로 XAMPP Updater를 다시 실행하시겠습니까?\n현재 XAMPP 경로와 진행할 업데이트는 새 창으로 전달됩니다.",
             "관리자 권한 필요",
             MessageBoxButton.YesNo,
             MessageBoxImage.Information,
@@ -39,7 +44,7 @@ internal static class AdministratorPrivilege
 
         try
         {
-            RelaunchElevated(xamppRoot);
+            RelaunchElevated(xamppRoot, resumeComponent, resumeVersion);
             Application.Current.Shutdown();
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
@@ -53,7 +58,7 @@ internal static class AdministratorPrivilege
         return false;
     }
 
-    private static void RelaunchElevated(string? xamppRoot)
+    private static void RelaunchElevated(string? xamppRoot, string? resumeComponent, string? resumeVersion)
     {
         var processPath = Environment.ProcessPath ?? throw new InvalidOperationException("현재 실행 파일 경로를 확인할 수 없습니다.");
         var entryPath = Assembly.GetEntryAssembly()?.Location ?? throw new InvalidOperationException("애플리케이션 DLL 경로를 확인할 수 없습니다.");
@@ -80,6 +85,13 @@ internal static class AdministratorPrivilege
             start.ArgumentList.Add(Path.GetFullPath(xamppRoot));
         }
 
+        if (!string.IsNullOrWhiteSpace(resumeComponent) && !string.IsNullOrWhiteSpace(resumeVersion))
+        {
+            start.ArgumentList.Add("--resume-update");
+            start.ArgumentList.Add(resumeComponent);
+            start.ArgumentList.Add(resumeVersion);
+        }
+
         _ = Process.Start(start) ?? throw new InvalidOperationException("관리자 권한 프로세스를 시작하지 못했습니다.");
     }
 
@@ -90,6 +102,17 @@ internal static class AdministratorPrivilege
         {
             if (string.Equals(args[i], "--xampp-root", StringComparison.OrdinalIgnoreCase))
                 return args[i + 1];
+        }
+        return null;
+    }
+
+    public static (string Component, string Version)? GetStartupResumeUpdate()
+    {
+        var args = Environment.GetCommandLineArgs();
+        for (var i = 1; i < args.Length - 2; i++)
+        {
+            if (string.Equals(args[i], "--resume-update", StringComparison.OrdinalIgnoreCase))
+                return (args[i + 1], args[i + 2]);
         }
         return null;
     }
