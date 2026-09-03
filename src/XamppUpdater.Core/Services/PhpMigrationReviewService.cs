@@ -44,7 +44,8 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
         IPhpIniMigrationService? iniMigrationService = null,
         IPhpExternalExtensionInstaller? externalExtensionInstaller = null)
     {
-        _iniMigrationService = iniMigrationService ?? new PhpIniMigrationService(new IgnorePhpMigrationOverrideStore());
+        _iniMigrationService = iniMigrationService ??
+            new RobustPhpIniMigrationService(new PhpIniMigrationService(new IgnorePhpMigrationOverrideStore()));
         _externalExtensionInstaller = externalExtensionInstaller ?? new PhpExternalExtensionInstaller();
     }
 
@@ -121,7 +122,15 @@ public sealed class PhpMigrationReviewService : IPhpMigrationReviewService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            var runtimeValidation = PhpTargetRuntimeValidator.Validate(phpRoot, migration.IniPath);
+
+            // 실제 설치 후 php.ini에는 C:\xampp\php 같은 최종 절대경로가 맞지만,
+            // 파괴적 교체 전 스테이징 PHP를 실행할 때는 그 경로가 현재 PHP 7.x를 가리킨다.
+            // 검증 전용 복사본만 스테이징 루트로 재기준화하여 false failure를 방지한다.
+            var validationIni = PhpStagingIniPathRewriter.CreateValidationIni(
+                migration.IniPath,
+                finalPhpRoot,
+                phpRoot);
+            var runtimeValidation = PhpTargetRuntimeValidator.Validate(phpRoot, validationIni);
             if (runtimeValidation.Valid)
             {
                 items.Add(new PhpMigrationReviewItem(
