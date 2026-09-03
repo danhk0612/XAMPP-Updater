@@ -29,7 +29,10 @@ public sealed class SnapshottingMariaDbUpdateExecutor : IMariaDbUpdateExecutor
         }
         catch (Exception ex) { warnings.Add("업데이트 전 설정 snapshot 저장 실패: " + ex.Message); }
 
-        var result = await _inner.ExecuteAsync(installation, target, package, backup, credentials, cancellationToken);
+        var result = await UpdateExecutionWatchdog.ExecuteAsync(
+            token => _inner.ExecuteAsync(installation, target, package, backup, credentials, token),
+            TimeSpan.FromMinutes(30),
+            cancellationToken);
         if (result.Success)
         {
             try
