@@ -90,8 +90,10 @@ public partial class MainWindow
         void Apply(XamppComponentType type, IReadOnlyList<UpdateTargetOption> targets)
         {
             var combo = GetTargetComboBox(type);
+            var updateButton = GetPrimaryUpdateButton(type);
             if (targets.Count > 0)
             {
+                updateButton.Visibility = Visibility.Visible;
                 if (combo.ItemsSource is not IEnumerable<UpdateTargetOption>)
                 {
                     combo.ItemsSource = targets;
@@ -102,6 +104,7 @@ public partial class MainWindow
             }
 
             var current = _lastInstallation.Components.FirstOrDefault(item => item.Type == type)?.Version;
+            updateButton.Visibility = Visibility.Collapsed;
             if (string.IsNullOrWhiteSpace(current))
             {
                 combo.ItemsSource = null;
@@ -135,9 +138,6 @@ public partial class MainWindow
             }
 
             var candidate = _rollbackCatalog.FindLatestCandidate(_lastInstallation.RootPath, type, current);
-            if (candidate is not null && type == XamppComponentType.MariaDb && candidate.Manifest.LogicalBackup is null)
-                candidate = null;
-
             button.Visibility = candidate is null ? Visibility.Collapsed : Visibility.Visible;
             button.IsEnabled = candidate is not null && !AnyComponentOperationRunning();
             button.Content = candidate is null ? "롤백" : $"{candidate.Manifest.CurrentVersion}로 롤백";
