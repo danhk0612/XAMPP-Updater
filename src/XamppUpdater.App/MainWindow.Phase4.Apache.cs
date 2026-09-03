@@ -275,6 +275,8 @@ public partial class MainWindow
             return;
         }
 
+        if (!AdministratorPrivilege.EnsureElevated(this, installation.RootPath, "Apache 실제 업데이트")) return;
+
         var confirmation = MessageBox.Show(
             this,
             $"Apache를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
