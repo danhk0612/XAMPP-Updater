@@ -28,7 +28,10 @@ public partial class App : Application
             }
 
             if (window is MainWindow mainWindow)
+            {
+                mainWindow.InitializeConfigHistoryUi();
                 await mainWindow.InspectStartupRootAsync();
+            }
         });
     }
 }
