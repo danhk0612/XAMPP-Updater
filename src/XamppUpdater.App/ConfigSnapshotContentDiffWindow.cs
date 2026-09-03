@@ -7,12 +7,12 @@ namespace XamppUpdater.App;
 
 public sealed class ConfigSnapshotContentDiffWindow : Window
 {
-    private readonly ConfigSnapshotDiffResult _diff;
+    private readonly ConfigSnapshotDiff _diff;
     private readonly ListBox _files = new() { MinWidth = 300 };
     private readonly TextBox _olderText = CreateViewer();
     private readonly TextBox _newerText = CreateViewer();
 
-    public ConfigSnapshotContentDiffWindow(ConfigSnapshotDiffResult diff)
+    public ConfigSnapshotContentDiffWindow(ConfigSnapshotDiff diff)
     {
         _diff = diff;
         Title = $"설정 내용 비교 - {diff.Older.Type}";
