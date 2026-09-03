@@ -7,7 +7,7 @@ namespace XamppUpdater.Core.Services;
 
 public interface IConfigSnapshotService
 {
-    ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage);
+    ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage, string? note = null);
     IReadOnlyList<ConfigSnapshotManifest> List(string xamppRoot, XamppComponentType type);
     ConfigSnapshotManifest? Load(string manifestPath);
 }
@@ -16,7 +16,7 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    public ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage)
+    public ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage, string? note = null)
     {
         var fullRoot = Path.GetFullPath(xamppRoot);
         var componentRoot = type switch
@@ -28,6 +28,9 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
         };
 
         var files = EnumerateConfigFiles(componentRoot, type).ToArray();
+        if (files.Length == 0)
+            throw new InvalidOperationException($"{type}에서 저장할 설정 파일을 찾지 못했습니다.");
+
         var capturedAt = DateTimeOffset.Now;
         var safeStage = Sanitize(stage);
         var snapshotRoot = Path.Combine(GetComponentHistoryRoot(fullRoot, type), $"{capturedAt:yyyyMMdd-HHmmssfff}-{safeStage}");
@@ -53,7 +56,8 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
             type,
             version,
             stage,
-            entries);
+            entries,
+            string.IsNullOrWhiteSpace(note) ? null : note.Trim());
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false));
         return manifest;
     }
@@ -141,6 +145,7 @@ public sealed record ConfigSnapshotManifest(
     XamppComponentType Type,
     string? Version,
     string Stage,
-    IReadOnlyList<ConfigSnapshotFile> Files);
+    IReadOnlyList<ConfigSnapshotFile> Files,
+    string? Note = null);
 
 public sealed record ConfigSnapshotFile(string RelativePath, long Size, string Sha256);
