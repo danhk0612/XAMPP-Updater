@@ -12,6 +12,7 @@ public interface IMariaDbUpdateExecutor
         UpdateTargetOption target,
         PackagePreparationResult package,
         BackupResult backup,
+        MariaDbCredentials? credentials = null,
         CancellationToken cancellationToken = default);
 }
 
@@ -26,7 +27,13 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         _versionDetector = versionDetector ?? new ComponentVersionDetector();
     }
 
-    public async Task<UpdateExecutionResult> ExecuteAsync(XamppInstallation installation, UpdateTargetOption target, PackagePreparationResult package, BackupResult backup, CancellationToken cancellationToken = default)
+    public async Task<UpdateExecutionResult> ExecuteAsync(
+        XamppInstallation installation,
+        UpdateTargetOption target,
+        PackagePreparationResult package,
+        BackupResult backup,
+        MariaDbCredentials? credentials = null,
+        CancellationToken cancellationToken = default)
     {
         if (target.Type != XamppComponentType.MariaDb || package.Type != XamppComponentType.MariaDb || backup.Manifest.Type != XamppComponentType.MariaDb)
             throw new ArgumentException("MariaDB 업데이트에 필요한 대상/패키지/백업 정보가 아닙니다.");
@@ -42,7 +49,8 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         var xamppRoot = Path.GetFullPath(installation.RootPath);
         var mysqlRoot = Path.Combine(xamppRoot, "mysql");
         var serviceName = component.ServiceName;
-        var unmanagedRunning = serviceName is null && (Process.GetProcessesByName("mysqld").Length > 0 || Process.GetProcessesByName("mariadbd").Length > 0);
+        var unmanagedRunning = serviceName is null &&
+            (Process.GetProcessesByName("mysqld").Length > 0 || Process.GetProcessesByName("mariadbd").Length > 0);
         if (unmanagedRunning) throw new InvalidOperationException("XAMPP MariaDB가 관리 가능한 Windows 서비스 없이 실행 중입니다. 먼저 종료해야 합니다.");
         if (serviceName is null) throw new InvalidOperationException("MariaDB 실제 업데이트에는 XAMPP mysql을 가리키는 Windows 서비스가 필요합니다.");
 
@@ -96,13 +104,15 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
             var upgrade = FindUpgradeTool(mysqlRoot);
             if (upgrade is not null)
             {
-                var upgradeResult = await RunWithTimeoutAsync(upgrade, Array.Empty<string>(), mysqlRoot, TimeSpan.FromMinutes(3), cancellationToken);
-                if (upgradeResult.ExitCode != 0 && LooksLikeAuthenticationFailure(upgradeResult.Output))
-                    upgradeResult = await RunWithTimeoutAsync(upgrade, new[] { "--user=root" }, mysqlRoot, TimeSpan.FromMinutes(3), cancellationToken);
-                if (upgradeResult.ExitCode != 0) throw new InvalidOperationException("mariadb-upgrade/mysql_upgrade 실패: " + Compact(upgradeResult.Output));
+                var upgradeResult = await RunUpgradeAsync(upgrade, mysqlRoot, credentials, cancellationToken);
+                if (upgradeResult.ExitCode != 0)
+                    throw new InvalidOperationException("mariadb-upgrade/mysql_upgrade 실패: " + Compact(upgradeResult.Output));
                 steps.Add($"업그레이드 도구 실행 완료: {Path.GetFileName(upgrade)}");
             }
-            else warnings.Add("mariadb-upgrade/mysql_upgrade 실행 파일을 찾지 못해 업그레이드 도구 단계는 생략했습니다.");
+            else
+            {
+                warnings.Add("mariadb-upgrade/mysql_upgrade 실행 파일을 찾지 못해 업그레이드 도구 단계는 생략했습니다.");
+            }
 
             if (!string.Equals(_serviceController.GetState(serviceName), "RUNNING", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("업그레이드 후 MariaDB 서비스가 RUNNING 상태가 아닙니다.");
@@ -176,8 +186,44 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         }
     }
 
+    private static async Task<ProcessResult> RunUpgradeAsync(
+        string executable,
+        string workingDirectory,
+        MariaDbCredentials? credentials,
+        CancellationToken cancellationToken)
+    {
+        string? optionFile = null;
+        try
+        {
+            var arguments = new List<string>();
+            if (credentials is not null)
+            {
+                optionFile = Path.Combine(Path.GetTempPath(), $"xampp-updater-mariadb-upgrade-{Guid.NewGuid():N}.cnf");
+                var text = "[client]" + Environment.NewLine +
+                           $"user=\"{MariaDbLogicalBackupService.EscapeOptionFileValue(credentials.UserName)}\"" + Environment.NewLine +
+                           $"password=\"{MariaDbLogicalBackupService.EscapeOptionFileValue(credentials.Password)}\"" + Environment.NewLine;
+                await File.WriteAllTextAsync(optionFile, text, cancellationToken);
+                arguments.Add($"--defaults-extra-file={optionFile}");
+            }
+
+            var result = await RunWithTimeoutAsync(executable, arguments, workingDirectory, TimeSpan.FromMinutes(3), cancellationToken);
+            if (result.ExitCode == 0 || credentials is not null || !LooksLikeAuthenticationFailure(result.Output))
+                return result;
+
+            return await RunWithTimeoutAsync(executable, new[] { "--user=root" }, workingDirectory, TimeSpan.FromMinutes(3), cancellationToken);
+        }
+        finally
+        {
+            if (optionFile is not null && File.Exists(optionFile))
+            {
+                try { File.Delete(optionFile); } catch { }
+            }
+        }
+    }
+
     internal static bool IsSameSeries(string currentVersion, string targetVersion) =>
-        Version.TryParse(currentVersion, out var current) && Version.TryParse(targetVersion, out var target) && current.Major == target.Major && current.Minor == target.Minor;
+        Version.TryParse(currentVersion, out var current) && Version.TryParse(targetVersion, out var target) &&
+        current.Major == target.Major && current.Minor == target.Minor;
 
     private static void EnsureSameSeries(string currentVersion, string targetVersion)
     {
@@ -210,7 +256,8 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         }
         var logical = backup.Manifest.LogicalBackup!;
         var logicalPath = Path.GetFullPath(Path.Combine(backup.Manifest.BackupRoot, logical.RelativePath));
-        if (!IsUnderRoot(logicalPath, backup.Manifest.BackupRoot) || !File.Exists(logicalPath) || new FileInfo(logicalPath).Length != logical.Size || !string.Equals(ComputeSha256(logicalPath), logical.Sha256, StringComparison.OrdinalIgnoreCase))
+        if (!IsUnderRoot(logicalPath, backup.Manifest.BackupRoot) || !File.Exists(logicalPath) ||
+            new FileInfo(logicalPath).Length != logical.Size || !string.Equals(ComputeSha256(logicalPath), logical.Sha256, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException("MariaDB 논리 백업 SQL의 크기/SHA256 검증에 실패했습니다.");
     }
 
@@ -227,7 +274,8 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         var executable = FindServerExecutable(root) ?? throw new FileNotFoundException("스테이징 MariaDB에서 mariadbd.exe/mysqld.exe를 찾을 수 없습니다.");
         var result = RunWithTimeoutAsync(executable, new[] { "--version" }, root, TimeSpan.FromSeconds(15), CancellationToken.None).GetAwaiter().GetResult();
         var parsed = ComponentVersionDetector.ParseVersion(XamppComponentType.MariaDb, result.Output);
-        if (result.ExitCode != 0 || !string.Equals(parsed, targetVersion, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException($"스테이징 MariaDB 버전 검증 실패: 기대 {targetVersion}, 실제 {parsed ?? "확인 실패"} / {Compact(result.Output)}");
+        if (result.ExitCode != 0 || !string.Equals(parsed, targetVersion, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"스테이징 MariaDB 버전 검증 실패: 기대 {targetVersion}, 실제 {parsed ?? "확인 실패"} / {Compact(result.Output)}");
     }
 
     private static void PreserveDataByCopy(string oldRoot, string newRoot)
@@ -254,7 +302,8 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
     private static void EnsureServiceExecutableCompatibility(string configuredExecutable, string liveRoot)
     {
         var relative = Path.GetRelativePath(liveRoot, configuredExecutable);
-        if (relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative == "..") throw new InvalidOperationException("MariaDB 서비스 실행 파일이 선택한 XAMPP mysql 디렉터리 밖을 가리킵니다: " + configuredExecutable);
+        if (relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative == "..")
+            throw new InvalidOperationException("MariaDB 서비스 실행 파일이 선택한 XAMPP mysql 디렉터리 밖을 가리킵니다: " + configuredExecutable);
         var destination = Path.Combine(liveRoot, relative);
         if (File.Exists(destination)) return;
         var packagedServer = FindServerExecutable(liveRoot) ?? throw new FileNotFoundException("새 MariaDB 패키지에서 서비스용 서버 실행 파일을 찾을 수 없습니다.");
@@ -287,7 +336,11 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         return null;
     }
 
-    private static bool LooksLikeAuthenticationFailure(string output) => output.Contains("Access denied", StringComparison.OrdinalIgnoreCase) || output.Contains("using password", StringComparison.OrdinalIgnoreCase) || output.Contains("authentication", StringComparison.OrdinalIgnoreCase);
+    private static bool LooksLikeAuthenticationFailure(string output) =>
+        output.Contains("Access denied", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("using password", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("ERROR 1045", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("authentication", StringComparison.OrdinalIgnoreCase);
 
     private static string? TryReadErrorLogTail(string root)
     {
@@ -295,7 +348,11 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         {
             var data = Path.Combine(root, "data");
             if (!Directory.Exists(data)) return null;
-            var path = Directory.EnumerateFiles(data, "*.err", SearchOption.TopDirectoryOnly).Concat(Directory.EnumerateFiles(data, "mysql_error.log", SearchOption.TopDirectoryOnly)).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(File.GetLastWriteTimeUtc).FirstOrDefault();
+            var path = Directory.EnumerateFiles(data, "*.err", SearchOption.TopDirectoryOnly)
+                .Concat(Directory.EnumerateFiles(data, "mysql_error.log", SearchOption.TopDirectoryOnly))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
             return path is null ? null : string.Join(Environment.NewLine, File.ReadLines(path).TakeLast(40));
         }
         catch { return null; }
@@ -304,7 +361,8 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
-        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories)) Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+            Directory.CreateDirectory(Path.Combine(destination, Path.GetRelativePath(source, directory)));
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var target = Path.Combine(destination, Path.GetRelativePath(source, file));
@@ -313,9 +371,22 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         }
     }
 
-    private static async Task<ProcessResult> RunWithTimeoutAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, TimeSpan timeout, CancellationToken cancellationToken)
+    private static async Task<ProcessResult> RunWithTimeoutAsync(
+        string executable,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = workingDirectory };
+        var start = new ProcessStartInfo
+        {
+            FileName = executable,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory
+        };
         var bin = Path.GetDirectoryName(executable);
         if (!string.IsNullOrWhiteSpace(bin))
         {
@@ -339,10 +410,38 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         return new ProcessResult(process.ExitCode, output.Trim());
     }
 
-    private static string ComputeSha256(string filePath) { using var stream = File.OpenRead(filePath); return Convert.ToHexString(SHA256.HashData(stream)); }
-    private static bool PathsEqual(string left, string right) { try { return string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase); } catch { return false; } }
-    private static bool IsUnderRoot(string path, string root) { var fullPath = Path.GetFullPath(path); var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)); return fullPath.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) || fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase); }
-    private static void TryDeleteDirectory(string path) { if (!Directory.Exists(path)) return; try { Directory.Delete(path, recursive: true); } catch { } }
+    private static string ComputeSha256(string filePath)
+    {
+        using var stream = File.OpenRead(filePath);
+        return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    private static bool PathsEqual(string left, string right)
+    {
+        try
+        {
+            return string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch { return false; }
+    }
+
+    private static bool IsUnderRoot(string path, string root)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        return fullPath.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) ||
+               fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void TryDeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        try { Directory.Delete(path, recursive: true); } catch { }
+    }
+
     private static string Compact(string value) => value.Replace("\r", " ").Replace("\n", " ").Trim();
     private sealed record ProcessResult(int ExitCode, string Output);
 }
