@@ -31,6 +31,7 @@ public sealed class RollbackBackupCatalogService : IRollbackBackupCatalogService
                 // 현재 설치 버전이 당시 TargetVersion과 같고, 백업 버전이 더 낮을 때만 롤백 후보로 사용한다.
                 if (!string.Equals(manifest.TargetVersion, currentVersion, StringComparison.OrdinalIgnoreCase)) continue;
                 if (!IsOlder(manifest.CurrentVersion, currentVersion)) continue;
+                if (type == XamppComponentType.MariaDb && manifest.LogicalBackup is null) continue;
 
                 var filesRoot = Path.Combine(manifest.BackupRoot, "files");
                 if (!Directory.Exists(filesRoot)) continue;
