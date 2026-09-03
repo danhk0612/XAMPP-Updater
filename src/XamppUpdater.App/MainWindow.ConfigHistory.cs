@@ -25,7 +25,7 @@ public partial class MainWindow
             Content = "설정 이력",
             Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
-            ToolTip = "업데이트 전/후에 자동 저장된 설정 snapshot을 보고 두 시점을 비교합니다.",
+            ToolTip = "업데이트 전/후에 자동 저장된 설정 snapshot을 비교하고 검증 후 복원합니다.",
             Tag = type
         };
         button.Click += ConfigHistoryButton_Click;
@@ -41,6 +41,6 @@ public partial class MainWindow
             return;
         }
 
-        new ConfigHistoryWindow(_lastInstallation.RootPath, type) { Owner = this }.ShowDialog();
+        new ConfigHistoryWindow(_lastInstallation, type) { Owner = this }.ShowDialog();
     }
 }
