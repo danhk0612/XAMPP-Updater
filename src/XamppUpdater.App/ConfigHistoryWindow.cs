@@ -125,8 +125,21 @@ public sealed class ConfigHistoryWindow : Window
         return null;
     }
 
+    private ConfigSnapshotManifest[] MultiSelected(string action)
+    {
+        var selected = _list.SelectedItems.Cast<SnapshotItem>().Select(item => item.Manifest).ToArray();
+        if (selected.Length > 0) return selected;
+        MessageBox.Show(this, $"{action}할 snapshot을 1개 이상 선택하세요.", "설정 이력", MessageBoxButton.OK, MessageBoxImage.Information);
+        return Array.Empty<ConfigSnapshotManifest>();
+    }
+
     private void ShowSelection()
     {
+        if (_list.SelectedItems.Count > 1)
+        {
+            _details.Text = $"snapshot {_list.SelectedItems.Count:N0}개 선택됨\r\n\r\n무결성 검사와 snapshot 삭제는 여러 snapshot을 한 번에 처리할 수 있습니다.";
+            return;
+        }
         if (_list.SelectedItems.Count != 1 || _list.SelectedItem is not SnapshotItem selected) return;
         var snapshot = selected.Manifest;
         _details.Text =
@@ -171,16 +184,38 @@ public sealed class ConfigHistoryWindow : Window
 
     private void VerifySelected()
     {
-        var selected = SingleSelected("검사");
-        if (selected is null) return;
-        var result = _snapshots.Verify(selected);
+        var selected = MultiSelected("검사");
+        if (selected.Length == 0) return;
+
+        var validCount = 0;
+        var totalFiles = 0;
+        var failed = new List<string>();
+        foreach (var snapshot in selected)
+        {
+            var result = _snapshots.Verify(snapshot);
+            totalFiles += result.VerifiedFiles;
+            if (result.Valid)
+            {
+                validCount++;
+                continue;
+            }
+
+            var name = $"{snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {snapshot.Stage}";
+            var errors = result.Errors.Take(4).Select(error => "  - " + error);
+            failed.Add(name + Environment.NewLine + string.Join(Environment.NewLine, errors));
+        }
+
+        var summary =
+            $"선택 snapshot: {selected.Length:N0}개\n정상: {validCount:N0}개\n문제: {selected.Length - validCount:N0}개\n검증 성공 파일: {totalFiles:N0}개";
+        if (failed.Count > 0)
+            summary += "\n\n[문제 snapshot]\n" + string.Join("\n\n", failed.Take(8));
+
+        _details.Text = summary.Replace("\n", "\r\n");
         MessageBox.Show(this,
-            result.Valid
-                ? $"snapshot 무결성이 정상입니다.\n\n검증 파일: {result.VerifiedFiles:N0}개"
-                : $"snapshot 무결성 검사에서 문제가 발견되었습니다.\n\n검증 성공: {result.VerifiedFiles:N0}개\n\n{string.Join("\n", result.Errors.Take(12))}",
-            "snapshot 무결성",
+            summary,
+            "snapshot 일괄 무결성 검사",
             MessageBoxButton.OK,
-            result.Valid ? MessageBoxImage.Information : MessageBoxImage.Warning);
+            failed.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void EditSelectedNote()
@@ -200,19 +235,47 @@ public sealed class ConfigHistoryWindow : Window
 
     private void DeleteSelected()
     {
-        var selected = SingleSelected("삭제");
-        if (selected is null) return;
+        var selected = MultiSelected("삭제");
+        if (selected.Length == 0) return;
+
+        var preview = string.Join("\n", selected
+            .OrderByDescending(item => item.CapturedAt)
+            .Take(10)
+            .Select(item => $"- {item.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {item.Stage} / {item.Version ?? "Unknown"}"));
+        if (selected.Length > 10) preview += $"\n- 외 {selected.Length - 10:N0}개";
+
         var answer = MessageBox.Show(this,
-            $"이 snapshot을 삭제합니다. 이 작업은 실제 {_type} 설정에는 영향을 주지 않지만 삭제한 이력은 복구할 수 없습니다.\n\n" +
-            $"{selected.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {selected.Stage} / {selected.Version}\n메모: {selected.Note ?? "(없음)"}\n\n삭제하시겠습니까?",
-            "snapshot 삭제", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            $"선택한 snapshot {selected.Length:N0}개를 삭제합니다.\n" +
+            $"실제 {_type} 설정에는 영향을 주지 않지만 삭제한 이력은 복구할 수 없습니다.\n\n{preview}\n\n모두 삭제하시겠습니까?",
+            "snapshot 일괄 삭제", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
-        try
+
+        var deleted = 0;
+        var failures = new List<string>();
+        foreach (var snapshot in selected)
         {
-            _snapshots.Delete(selected);
-            ReloadSnapshots();
+            try
+            {
+                _snapshots.Delete(snapshot);
+                deleted++;
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"{snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}: {ex.Message}");
+            }
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "snapshot 삭제", MessageBoxButton.OK, MessageBoxImage.Error); }
+
+        ReloadSnapshots();
+        if (failures.Count == 0)
+        {
+            MessageBox.Show(this, $"snapshot {deleted:N0}개를 삭제했습니다.", "snapshot 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            MessageBox.Show(this,
+                $"삭제 완료: {deleted:N0}개\n삭제 실패: {failures.Count:N0}개\n\n{string.Join("\n", failures.Take(8))}",
+                "snapshot 일괄 삭제", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     private async void RestoreSelected_Click(object sender, RoutedEventArgs e)
