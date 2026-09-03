@@ -10,7 +10,7 @@ namespace XamppUpdater.App;
 public partial class MainWindow
 {
     private readonly IBackupLocatorService _backupLocator = new BackupLocatorService();
-    private readonly IPhpUpdateExecutor _phpUpdateExecutor = new PhpUpdateExecutor();
+    private readonly IPhpUpdateExecutor _phpUpdateExecutor = new VerifiedPhpUpdateExecutor();
     private readonly IVisualCppRuntimeInstaller _vcRuntimeInstaller = new VisualCppRuntimeInstaller();
     private readonly IExecutionLogService _executionLogService = new ExecutionLogService();
     private Button? _phpExecuteButton;
