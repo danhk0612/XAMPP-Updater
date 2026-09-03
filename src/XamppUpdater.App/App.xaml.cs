@@ -33,6 +33,7 @@ public partial class App : Application
                 await mainWindow.InspectStartupRootAsync();
                 await mainWindow.InitializeReleaseLifecycleAsync();
                 await mainWindow.ResumeStartupUpdateAsync();
+                await mainWindow.ResumeStartupRollbackAsync();
             }
         });
     }
