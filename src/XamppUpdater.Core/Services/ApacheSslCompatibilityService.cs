@@ -149,9 +149,9 @@ public static partial class ApacheSslCompatibilityService
              .Replace(">", "\\>", StringComparison.Ordinal)
              .Replace(";", "\\;", StringComparison.Ordinal);
 
-    [GeneratedRegex(@"(?im)^\s*SSLCertificateFile\s+[\"']?(?<path>[^\"'\r\n#]+)[\"']?\s*(?:#.*)?$")]
+    [GeneratedRegex("(?im)^\\s*SSLCertificateFile\\s+[\\\"']?(?<path>[^\\\"'\\r\\n#]+)[\\\"']?\\s*(?:#.*)?$")]
     private static partial Regex CertificateRegex();
 
-    [GeneratedRegex(@"(?im)^\s*SSLCertificateKeyFile\s+[\"']?(?<path>[^\"'\r\n#]+)[\"']?\s*(?:#.*)?$")]
+    [GeneratedRegex("(?im)^\\s*SSLCertificateKeyFile\\s+[\\\"']?(?<path>[^\\\"'\\r\\n#]+)[\\\"']?\\s*(?:#.*)?$")]
     private static partial Regex CertificateKeyRegex();
 }
