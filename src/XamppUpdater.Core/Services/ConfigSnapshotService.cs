@@ -8,9 +8,15 @@ namespace XamppUpdater.Core.Services;
 public interface IConfigSnapshotService
 {
     ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage, string? note = null);
+    ConfigSnapshotManifest CaptureTemporary(string xamppRoot, XamppComponentType type, string? version, string stage = "Current");
     IReadOnlyList<ConfigSnapshotManifest> List(string xamppRoot, XamppComponentType type);
     ConfigSnapshotManifest? Load(string manifestPath);
+    ConfigSnapshotIntegrityResult Verify(ConfigSnapshotManifest snapshot);
+    ConfigSnapshotManifest UpdateNote(ConfigSnapshotManifest snapshot, string? note);
+    void Delete(ConfigSnapshotManifest snapshot);
 }
+
+public sealed record ConfigSnapshotIntegrityResult(bool Valid, int VerifiedFiles, IReadOnlyList<string> Errors);
 
 public sealed class ConfigSnapshotService : IConfigSnapshotService
 {
@@ -19,47 +25,17 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
     public ConfigSnapshotManifest Capture(string xamppRoot, XamppComponentType type, string? version, string stage, string? note = null)
     {
         var fullRoot = Path.GetFullPath(xamppRoot);
-        var componentRoot = type switch
-        {
-            XamppComponentType.Apache => Path.Combine(fullRoot, "apache"),
-            XamppComponentType.Php => Path.Combine(fullRoot, "php"),
-            XamppComponentType.MariaDb => Path.Combine(fullRoot, "mysql"),
-            _ => throw new ArgumentOutOfRangeException(nameof(type))
-        };
-
-        var files = EnumerateConfigFiles(componentRoot, type).ToArray();
-        if (files.Length == 0)
-            throw new InvalidOperationException($"{type}에서 저장할 설정 파일을 찾지 못했습니다.");
-
         var capturedAt = DateTimeOffset.Now;
-        var safeStage = Sanitize(stage);
-        var snapshotRoot = Path.Combine(GetComponentHistoryRoot(fullRoot, type), $"{capturedAt:yyyyMMdd-HHmmssfff}-{safeStage}");
-        var filesRoot = Path.Combine(snapshotRoot, "files");
-        Directory.CreateDirectory(filesRoot);
+        var snapshotRoot = Path.Combine(GetComponentHistoryRoot(fullRoot, type), $"{capturedAt:yyyyMMdd-HHmmssfff}-{Sanitize(stage)}");
+        return CaptureInto(fullRoot, type, version, stage, note, capturedAt, snapshotRoot);
+    }
 
-        var entries = new List<ConfigSnapshotFile>();
-        foreach (var source in files)
-        {
-            var relative = Path.GetRelativePath(componentRoot, source).Replace('\\', '/');
-            var destination = Path.Combine(filesRoot, relative.Replace('/', Path.DirectorySeparatorChar));
-            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(source, destination, overwrite: true);
-            var info = new FileInfo(destination);
-            entries.Add(new ConfigSnapshotFile(relative, info.Length, ComputeSha256(destination)));
-        }
-
-        var manifestPath = Path.Combine(snapshotRoot, "manifest.json");
-        var manifest = new ConfigSnapshotManifest(
-            manifestPath,
-            capturedAt,
-            fullRoot,
-            type,
-            version,
-            stage,
-            entries,
-            string.IsNullOrWhiteSpace(note) ? null : note.Trim());
-        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false));
-        return manifest;
+    public ConfigSnapshotManifest CaptureTemporary(string xamppRoot, XamppComponentType type, string? version, string stage = "Current")
+    {
+        var fullRoot = Path.GetFullPath(xamppRoot);
+        var capturedAt = DateTimeOffset.Now;
+        var snapshotRoot = Path.Combine(Path.GetTempPath(), "XamppUpdater", "ConfigCompare", Guid.NewGuid().ToString("N"));
+        return CaptureInto(fullRoot, type, version, stage, null, capturedAt, snapshotRoot);
     }
 
     public IReadOnlyList<ConfigSnapshotManifest> List(string xamppRoot, XamppComponentType type)
@@ -81,11 +57,80 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
             if (!File.Exists(manifestPath)) return null;
             return JsonSerializer.Deserialize<ConfigSnapshotManifest>(File.ReadAllText(manifestPath));
         }
-        catch
-        {
-            return null;
-        }
+        catch { return null; }
     }
+
+    public ConfigSnapshotIntegrityResult Verify(ConfigSnapshotManifest snapshot)
+    {
+        var errors = new List<string>();
+        var verified = 0;
+        if (!File.Exists(snapshot.ManifestPath))
+            errors.Add("manifest 파일이 없습니다.");
+
+        var filesRoot = Path.Combine(Path.GetDirectoryName(snapshot.ManifestPath)!, "files");
+        foreach (var entry in snapshot.Files)
+        {
+            try
+            {
+                var path = SafeCombine(filesRoot, entry.RelativePath);
+                if (!File.Exists(path)) { errors.Add($"파일 없음: {entry.RelativePath}"); continue; }
+                var info = new FileInfo(path);
+                if (info.Length != entry.Size) { errors.Add($"크기 불일치: {entry.RelativePath}"); continue; }
+                if (!string.Equals(ComputeSha256(path), entry.Sha256, StringComparison.OrdinalIgnoreCase))
+                { errors.Add($"SHA256 불일치: {entry.RelativePath}"); continue; }
+                verified++;
+            }
+            catch (Exception ex) { errors.Add($"{entry.RelativePath}: {ex.Message}"); }
+        }
+        return new ConfigSnapshotIntegrityResult(errors.Count == 0, verified, errors);
+    }
+
+    public ConfigSnapshotManifest UpdateNote(ConfigSnapshotManifest snapshot, string? note)
+    {
+        var updated = snapshot with { Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim() };
+        File.WriteAllText(snapshot.ManifestPath, JsonSerializer.Serialize(updated, JsonOptions), new UTF8Encoding(false));
+        return updated;
+    }
+
+    public void Delete(ConfigSnapshotManifest snapshot)
+    {
+        var folder = Path.GetDirectoryName(snapshot.ManifestPath) ?? throw new InvalidOperationException("snapshot 폴더를 확인할 수 없습니다.");
+        if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+    }
+
+    private static ConfigSnapshotManifest CaptureInto(string fullRoot, XamppComponentType type, string? version, string stage, string? note, DateTimeOffset capturedAt, string snapshotRoot)
+    {
+        var componentRoot = GetComponentRoot(fullRoot, type);
+        var files = EnumerateConfigFiles(componentRoot, type).ToArray();
+        if (files.Length == 0) throw new InvalidOperationException($"{type}에서 저장할 설정 파일을 찾지 못했습니다.");
+
+        var filesRoot = Path.Combine(snapshotRoot, "files");
+        Directory.CreateDirectory(filesRoot);
+        var entries = new List<ConfigSnapshotFile>();
+        foreach (var source in files)
+        {
+            var relative = Path.GetRelativePath(componentRoot, source).Replace('\\', '/');
+            var destination = SafeCombine(filesRoot, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(source, destination, overwrite: true);
+            var info = new FileInfo(destination);
+            entries.Add(new ConfigSnapshotFile(relative, info.Length, ComputeSha256(destination)));
+        }
+
+        var manifestPath = Path.Combine(snapshotRoot, "manifest.json");
+        var manifest = new ConfigSnapshotManifest(manifestPath, capturedAt, fullRoot, type, version, stage, entries,
+            string.IsNullOrWhiteSpace(note) ? null : note.Trim());
+        File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions), new UTF8Encoding(false));
+        return manifest;
+    }
+
+    private static string GetComponentRoot(string fullRoot, XamppComponentType type) => type switch
+    {
+        XamppComponentType.Apache => Path.Combine(fullRoot, "apache"),
+        XamppComponentType.Php => Path.Combine(fullRoot, "php"),
+        XamppComponentType.MariaDb => Path.Combine(fullRoot, "mysql"),
+        _ => throw new ArgumentOutOfRangeException(nameof(type))
+    };
 
     private static IEnumerable<string> EnumerateConfigFiles(string componentRoot, XamppComponentType type)
     {
@@ -96,7 +141,6 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
             if (File.Exists(ini)) yield return ini;
             yield break;
         }
-
         if (type == XamppComponentType.MariaDb)
         {
             foreach (var relative in new[] { "my.ini", "my.cnf", "bin/my.ini", "bin/my.cnf" })
@@ -112,8 +156,7 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
         foreach (var file in Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(confRoot, file).Replace('\\', '/');
-            if (relative.StartsWith("original/", StringComparison.OrdinalIgnoreCase)) continue;
-            yield return file;
+            if (!relative.StartsWith("original/", StringComparison.OrdinalIgnoreCase)) yield return file;
         }
     }
 
@@ -128,6 +171,15 @@ public sealed class ConfigSnapshotService : IConfigSnapshotService
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream));
+    }
+
+    private static string SafeCombine(string root, string relative)
+    {
+        var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
+        if (!full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("snapshot 상대 경로가 허용된 루트를 벗어납니다: " + relative);
+        return full;
     }
 
     private static string Sanitize(string value)
