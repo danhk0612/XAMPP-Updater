@@ -122,6 +122,34 @@ public partial class MainWindow
             target.Version) is not null;
     }
 
+    private async Task EnsureApacheRuntimeAsync(PackagePreparationResult package)
+    {
+        Version? minimum = null;
+        if (package.FileName.Contains("-VS18", StringComparison.OrdinalIgnoreCase))
+            minimum = new Version(14, 51, 36247, 0);
+
+        if (minimum is null) return;
+
+        StatusText.Text = $"Apache VC++ 런타임 확인 중... 최소 {minimum.Major}.{minimum.Minor}.{minimum.Build}";
+        var result = await _vcRuntimeInstaller.EnsureMinimumAsync(package.Architecture, minimum);
+        AppendDetail(
+            XamppComponentType.Apache,
+            $"VC++ 런타임 확인: 최소 {minimum} / before={result.BeforeVersion?.ToString() ?? "확인 불가"} / after={result.AfterVersion?.ToString() ?? "확인 불가"} / installed={result.Installed} / exit={result.ExitCode}");
+
+        if (!result.Success)
+        {
+            throw new InvalidOperationException(
+                $"Apache {package.Version} 패키지에 필요한 Visual C++ Redistributable {minimum} 이상을 준비하지 못했습니다. " +
+                $"현재 런타임: {result.AfterVersion?.ToString() ?? "확인 불가"}, 종료 코드: {result.ExitCode}");
+        }
+
+        if (result.RebootRequired)
+        {
+            throw new InvalidOperationException(
+                "Apache용 Visual C++ Redistributable 설치는 완료됐지만 Windows 재부팅이 필요합니다. 재부팅 후 마이그레이션 검토를 다시 실행하세요.");
+        }
+    }
+
     private async void ApacheReviewButton_Click(object sender, RoutedEventArgs e)
     {
         if (_apacheReviewRunning || _apacheUpdateRunning || _lastInstallation is null ||
@@ -136,6 +164,8 @@ public partial class MainWindow
         try
         {
             var installation = _lastInstallation;
+            await EnsureApacheRuntimeAsync(package);
+
             var review = await Task.Run(async () =>
                 await _apacheMigrationReviewService.BuildAsync(installation, target, package));
 
@@ -220,6 +250,7 @@ public partial class MainWindow
         ApacheMigrationReviewResult precheck;
         try
         {
+            await EnsureApacheRuntimeAsync(package);
             precheck = await Task.Run(async () =>
                 await _apacheMigrationReviewService.BuildAsync(installation, target, package));
         }
