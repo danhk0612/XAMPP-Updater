@@ -43,8 +43,9 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
         automatic.Add("업데이트 실패 시 기존 mysql 디렉터리 전체를 자동 롤백합니다.");
 
         var sameSeries = IsSameSeries(current, target.Version);
-        if (!sameSeries)
-            review.Add($"{current} → {target.Version}는 교차 계열입니다. 중간 버전 순차 업그레이드 엔진이 필요합니다.");
+        automatic.Add(sameSeries
+            ? $"동일 계열 패치 업데이트: {current} → {target.Version}"
+            : $"직접 major 업그레이드: {current} → {target.Version}. MariaDB 공식 정책상 이전 버전에서 최신 버전으로 직접 업그레이드가 가능하며, 새 data 사본에서만 기동/업그레이드를 수행합니다.");
 
         var logical = backup.Manifest.LogicalBackup;
         if (logical is null)
@@ -78,7 +79,7 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
             backup.CopiedBytes,
             automatic,
             review,
-            sameSeries && review.Count == 0);
+            review.Count == 0);
     }
 
     private static string? FindUpgradeToolInPackage(string packagePath)
