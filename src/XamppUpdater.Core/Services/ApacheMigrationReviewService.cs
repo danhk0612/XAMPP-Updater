@@ -142,6 +142,7 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     private static Dictionary<string, string> ReadFiles(string confRoot)
     {
         return Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories)
+            .Where(path => IsActiveConfig(confRoot, path))
             .ToDictionary(
                 path => Path.GetRelativePath(confRoot, path).Replace('\\', '/'),
                 File.ReadAllText,
@@ -154,10 +155,16 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         {
             var relative = pair.Key.Replace('/', Path.DirectorySeparatorChar);
             var destination = Path.GetFullPath(Path.Combine(confRoot, relative));
-            if (!IsUnderRoot(destination, confRoot)) continue;
+            if (!IsUnderRoot(destination, confRoot) || !IsActiveConfig(confRoot, destination)) continue;
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
             File.WriteAllText(destination, pair.Value);
         }
+    }
+
+    private static bool IsActiveConfig(string confRoot, string path)
+    {
+        var relative = Path.GetRelativePath(confRoot, path).Replace('\\', '/');
+        return !relative.StartsWith("original/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string ResolvePayloadRoot(string extractRoot, string payloadEntry)
@@ -187,7 +194,8 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     private static IReadOnlyList<string> PreserveReferencedModules(string currentRoot, string stagedRoot, string stagedConf)
     {
         var result = new List<string>();
-        foreach (var conf in Directory.EnumerateFiles(stagedConf, "*.conf", SearchOption.AllDirectories))
+        foreach (var conf in Directory.EnumerateFiles(stagedConf, "*.conf", SearchOption.AllDirectories)
+                     .Where(path => IsActiveConfig(stagedConf, path)))
         {
             foreach (var raw in File.ReadLines(conf))
             {
