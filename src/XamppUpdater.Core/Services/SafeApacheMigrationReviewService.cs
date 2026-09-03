@@ -8,7 +8,7 @@ public sealed class SafeApacheMigrationReviewService : IApacheMigrationReviewSer
 
     public SafeApacheMigrationReviewService(IApacheMigrationReviewService? inner = null)
     {
-        _inner = inner ?? new ApacheMigrationReviewService();
+        _inner = inner ?? new ApacheCompatibilityPreparedReviewService();
     }
 
     public async Task<ApacheMigrationReviewResult> BuildAsync(
@@ -27,15 +27,15 @@ public sealed class SafeApacheMigrationReviewService : IApacheMigrationReviewSer
         var items = result.Items.ToList();
         items.Add(new ApacheMigrationReviewItem(
             ApacheMigrationReviewKind.NeedsReview,
-            "검토용 staging에서만 Apache 모듈 종속 DLL 자동 복구가 발생했습니다. 실제 실행 단계와 동일한 복구 경로가 아직 보장되지 않으므로 안전을 위해 업데이트 실행을 차단합니다."));
+            "검토/실행 공통 호환 패키지 적용 후에도 검토 단계에서만 추가 종속 DLL 복구가 발생했습니다. 실제 실행과 결과가 달라질 수 있으므로 안전을 위해 업데이트 실행을 차단합니다."));
 
         return result with
         {
             SyntaxValid = false,
             Items = items,
             ValidationOutput = string.IsNullOrWhiteSpace(result.ValidationOutput)
-                ? "Review-only dependency repair detected."
-                : result.ValidationOutput + Environment.NewLine + "Review-only dependency repair detected; execution blocked."
+                ? "Review-only dependency repair detected after shared compatibility preparation."
+                : result.ValidationOutput + Environment.NewLine + "Review-only dependency repair detected after shared compatibility preparation; execution blocked."
         };
     }
 }
