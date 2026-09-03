@@ -54,11 +54,17 @@ public static class PhpTargetRuntimeValidator
 
     internal static bool HasExtensionLoadFailure(string output) =>
         output.Contains("Unable to load dynamic library", StringComparison.OrdinalIgnoreCase) ||
-        output.Contains("PHP Startup:", StringComparison.OrdinalIgnoreCase) &&
-        (output.Contains("The specified module could not be found", StringComparison.OrdinalIgnoreCase) ||
-         output.Contains("지정된 모듈을 찾을 수 없습니다", StringComparison.OrdinalIgnoreCase) ||
-         output.Contains("procedure could not be found", StringComparison.OrdinalIgnoreCase) ||
-         output.Contains("프로시저를 찾을 수 없습니다", StringComparison.OrdinalIgnoreCase));
+        output.Contains("Module compiled with module API=", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("PHP compiled with module API=", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("Module compiled with build ID=", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("PHP compiled with build ID=", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("These options need to match", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("The specified module could not be found", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("지정된 모듈을 찾을 수 없습니다", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("procedure could not be found", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("프로시저를 찾을 수 없습니다", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("%1 is not a valid Win32 application", StringComparison.OrdinalIgnoreCase) ||
+        output.Contains("올바른 Win32 응용 프로그램이 아닙니다", StringComparison.OrdinalIgnoreCase);
 
     private static ProcessResult Run(
         string executable,
