@@ -16,8 +16,7 @@ public partial class MainWindow
 
     private void InitializeMariaDbPhase4Ui()
     {
-        if (_mariaDbExecuteButton is not null) return;
-        if (MariaDbDiffButton.Parent is not Panel actionPanel) return;
+        if (_mariaDbExecuteButton is not null || MariaDbDiffButton.Parent is not Panel actionPanel) return;
 
         _mariaDbExecuteButton = new Button
         {
@@ -74,12 +73,17 @@ public partial class MainWindow
         }
 
         var current = _lastInstallation.Components.FirstOrDefault(item => item.Type == XamppComponentType.MariaDb)?.Version;
-        if (current is null || !MariaDbUpdateExecutor.IsSameSeries(current, target.Version))
+        if (string.IsNullOrWhiteSpace(current))
         {
             _mariaDbExecuteButton.IsEnabled = false;
-            _mariaDbExecuteButton.ToolTip = current is null
-                ? "현재 MariaDB 버전을 확인할 수 없습니다."
-                : $"MariaDB {current} → {target.Version}는 중간 계열 패키지를 순차 적용하는 다음 Phase 4C 단계에서 실행합니다.";
+            _mariaDbExecuteButton.ToolTip = "현재 MariaDB 버전을 확인할 수 없습니다.";
+            return;
+        }
+
+        if (!IsSameMariaDbSeries(current, target.Version))
+        {
+            _mariaDbExecuteButton.IsEnabled = false;
+            _mariaDbExecuteButton.ToolTip = $"MariaDB {current} → {target.Version}는 중간 계열 패키지를 순차 적용하는 다음 Phase 4C 단계에서 실행합니다.";
             return;
         }
 
@@ -100,9 +104,9 @@ public partial class MainWindow
 
         var installation = _lastInstallation;
         var current = installation.Components.FirstOrDefault(item => item.Type == XamppComponentType.MariaDb)?.Version;
-        if (current is null) return;
+        if (string.IsNullOrWhiteSpace(current)) return;
 
-        if (!MariaDbUpdateExecutor.IsSameSeries(current, target.Version))
+        if (!IsSameMariaDbSeries(current, target.Version))
         {
             MessageBox.Show(this,
                 $"MariaDB {current} → {target.Version}는 중간 계열 패키지를 순차 적용해야 합니다. 현재 첫 Phase 4C 실행 단계에서는 실제 파일을 변경하지 않습니다.",
@@ -205,4 +209,8 @@ public partial class MainWindow
             RefreshMariaDbExecuteEnabled();
         }
     }
+
+    private static bool IsSameMariaDbSeries(string currentVersion, string targetVersion) =>
+        Version.TryParse(currentVersion, out var current) && Version.TryParse(targetVersion, out var target) &&
+        current.Major == target.Major && current.Minor == target.Minor;
 }
