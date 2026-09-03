@@ -25,58 +25,76 @@ public sealed class WindowsServiceController : IWindowsServiceController
     {
         EnsureWindows();
         using var handle = Open(serviceName, ServiceQueryStatus | ServiceStop);
-        var current = QueryState(handle.DangerousGetHandle());
-        if (current == 1)
+        var current = QueryStatus(handle.DangerousGetHandle());
+        if (current.dwCurrentState == 1)
         {
             return;
         }
 
-        if (current != 3 && !ControlService(handle.DangerousGetHandle(), ServiceControlStop, out _))
+        if (current.dwCurrentState != 3 && !ControlService(handle.DangerousGetHandle(), ServiceControlStop, out _))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), $"서비스 중지 요청 실패: {serviceName}");
         }
 
-        WaitForState(handle.DangerousGetHandle(), 1, timeout, serviceName);
+        WaitForState(handle.DangerousGetHandle(), 1, timeout, serviceName, starting: false);
     }
 
     public void Start(string serviceName, TimeSpan timeout)
     {
         EnsureWindows();
         using var handle = Open(serviceName, ServiceQueryStatus | ServiceStart);
-        var current = QueryState(handle.DangerousGetHandle());
-        if (current == 4)
+        var current = QueryStatus(handle.DangerousGetHandle());
+        if (current.dwCurrentState == 4)
         {
             return;
         }
 
-        if (current != 2 && !StartService(handle.DangerousGetHandle(), 0, null))
+        if (current.dwCurrentState != 2 && !StartService(handle.DangerousGetHandle(), 0, null))
         {
             throw new Win32Exception(Marshal.GetLastWin32Error(), $"서비스 시작 요청 실패: {serviceName}");
         }
 
-        WaitForState(handle.DangerousGetHandle(), 4, timeout, serviceName);
+        WaitForState(handle.DangerousGetHandle(), 4, timeout, serviceName, starting: true);
     }
 
     internal static bool IsTerminalStateForOperation(uint currentState, bool starting) =>
         starting ? currentState == 4 : currentState == 1;
 
-    private static void WaitForState(IntPtr service, uint targetState, TimeSpan timeout, string serviceName)
+    private static void WaitForState(
+        IntPtr service,
+        uint targetState,
+        TimeSpan timeout,
+        string serviceName,
+        bool starting)
     {
         var deadline = DateTime.UtcNow + timeout;
+        SERVICE_STATUS_PROCESS last = default;
+
         while (DateTime.UtcNow < deadline)
         {
-            if (QueryState(service) == targetState)
+            last = QueryStatus(service);
+            if (last.dwCurrentState == targetState)
             {
                 return;
+            }
+
+            if (starting && last.dwCurrentState == 1)
+            {
+                throw new InvalidOperationException(
+                    $"서비스 시작 후 즉시 STOPPED 상태가 되었습니다: {serviceName} / " +
+                    $"Win32ExitCode={last.dwWin32ExitCode} / ServiceSpecificExitCode={last.dwServiceSpecificExitCode} / PID={last.dwProcessId}");
             }
 
             Thread.Sleep(200);
         }
 
-        throw new TimeoutException($"서비스 상태 변경 시간 초과: {serviceName} → {WindowsServiceStateReader.MapState(targetState)}");
+        var state = WindowsServiceStateReader.MapState(last.dwCurrentState);
+        throw new TimeoutException(
+            $"서비스 상태 변경 시간 초과: {serviceName} → {WindowsServiceStateReader.MapState(targetState)} / " +
+            $"현재={state} / Win32ExitCode={last.dwWin32ExitCode} / ServiceSpecificExitCode={last.dwServiceSpecificExitCode} / PID={last.dwProcessId}");
     }
 
-    private static uint QueryState(IntPtr service)
+    private static SERVICE_STATUS_PROCESS QueryStatus(IntPtr service)
     {
         var size = Marshal.SizeOf<SERVICE_STATUS_PROCESS>();
         if (!QueryServiceStatusEx(service, ScStatusProcessInfo, out var status, size, out _))
@@ -84,7 +102,7 @@ public sealed class WindowsServiceController : IWindowsServiceController
             throw new Win32Exception(Marshal.GetLastWin32Error(), "서비스 상태 확인 실패");
         }
 
-        return status.dwCurrentState;
+        return status;
     }
 
     private static ServiceHandle Open(string serviceName, uint access)
