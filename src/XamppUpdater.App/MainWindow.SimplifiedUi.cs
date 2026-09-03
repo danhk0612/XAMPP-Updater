@@ -58,6 +58,7 @@ public partial class MainWindow
         if (string.IsNullOrWhiteSpace(path)) return;
         await InspectAsync(path, source);
         if (_lastInstallation is not null) await CheckOnlineVersionsAsync();
+        UpdateCurrentVersionLabels();
         RefreshPrimaryUpdateButtons();
     }
 
@@ -70,7 +71,9 @@ public partial class MainWindow
 
     private bool CanStartPrimaryUpdate(XamppComponentType type)
     {
-        if (_primaryWorkflowRunning || _lastInstallation is null) return false;
+        if (_primaryWorkflowRunning || _apacheUpdateRunning || _phpUpdateRunning || _mariaDbUpdateRunning ||
+            _apacheReviewRunning || _phpMigrationReviewRunning || _mariaDbBackupRunning || _lastInstallation is null)
+            return false;
         return GetTargetComboBox(type).SelectedItem is UpdateTargetOption;
     }
 
@@ -80,6 +83,17 @@ public partial class MainWindow
             !Enum.TryParse(button.Tag?.ToString(), true, out XamppComponentType type) ||
             _lastInstallation is null || GetTargetComboBox(type).SelectedItem is not UpdateTargetOption target)
             return;
+
+        if (!AdministratorPrivilege.IsElevated)
+        {
+            AdministratorPrivilege.EnsureElevated(
+                this,
+                _lastInstallation.RootPath,
+                $"{type} 업데이트",
+                type.ToString(),
+                target.Version);
+            return;
+        }
 
         _primaryWorkflowRunning = true;
         RefreshPrimaryUpdateButtons();
@@ -91,33 +105,38 @@ public partial class MainWindow
         {
             var installation = _lastInstallation;
             StatusText.Text = $"{type} {target.Version} 업데이트 준비를 시작합니다.";
+            AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] • 업데이트 준비 시작: {target.Version}");
             AppendDetail(type, $"업데이트 준비 시작: {target.Version}");
 
-            UpdateUiProgress(5, "현재 설치 및 서비스 상태 점검 중...");
+            UpdateUiProgress(type, 5, "현재 설치 및 서비스 상태 점검 중...");
             var preflight = await Task.Run(() => _preflightService.Inspect(installation, type, target.Version));
             _preflightReports[type] = preflight;
             if (type == XamppComponentType.MariaDb && !CanRunMariaDbSafeBackup(preflight))
                 throw new InvalidOperationException("실행 중인 MariaDB를 안전하게 중지할 Windows 서비스를 찾지 못했습니다.");
 
-            UpdateUiProgress(15, "업데이트 패키지 다운로드 및 검증 중...");
+            UpdateUiProgress(type, 15, "업데이트 패키지 다운로드 및 검증 중...");
             var package = await _packagePreparationService.PrepareAsync(target, _lastProfile!);
             _packageResults[type] = package;
             AppendDetail(type, $"패키지 검증 완료: {package.FileName} / SHA256 {package.Sha256}");
 
-            UpdateUiProgress(35, "설정 및 호환성 사전 검사 중...");
+            UpdateUiProgress(type, 35, "설정 및 호환성 사전 검사 중...");
             var diff = await Task.Run(() => _configDiffService.Compare(preflight, package));
             AppendDetail(type, $"설정 비교: 변경 {diff.Changed:N0} / 기존만 {diff.CurrentOnly:N0} / 신규만 {diff.TargetOnly:N0}");
 
-            if (!await RunAutomaticReviewAsync(type, installation, target, package)) return;
+            if (!await RunAutomaticReviewAsync(type, installation, target, package))
+            {
+                UpdateUiProgress(type, 0, "사용자가 마이그레이션 검토를 취소했습니다.");
+                return;
+            }
 
-            UpdateUiProgress(55, "롤백 백업 생성 중...");
+            UpdateUiProgress(type, 55, "롤백 백업 생성 중...");
             if (type == XamppComponentType.MariaDb)
             {
                 var backup = _backupLocator.FindLatest(installation.RootPath, type, preflight.CurrentVersion, target.Version);
                 if (backup?.Manifest.LogicalBackup is null)
-                {
                     await CreateMariaDbRollbackBackupForPipelineAsync(preflight, target);
-                }
+                else
+                    AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ 기존 일치 MariaDB 롤백 백업 재사용");
             }
             else
             {
@@ -125,15 +144,17 @@ public partial class MainWindow
                 if (existing is null)
                 {
                     var backup = await Task.Run(() => _backupService.CreateBackup(preflight));
+                    AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ 롤백 백업 완료: {backup.CopiedFiles:N0}개 / {FormatBytes(backup.CopiedBytes)}");
                     AppendDetail(type, $"롤백 백업 완료: {backup.CopiedFiles:N0}개 / {FormatBytes(backup.CopiedBytes)}");
                 }
                 else
                 {
+                    AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ 기존 일치 롤백 백업 재사용");
                     AppendDetail(type, "기존 일치 롤백 백업 재사용");
                 }
             }
 
-            UpdateUiProgress(70, "업데이트 준비 완료. 실제 업데이트 단계로 이동합니다.");
+            UpdateUiProgress(type, 70, "업데이트 준비 완료. 실제 업데이트 단계로 이동합니다.");
             switch (type)
             {
                 case XamppComponentType.Apache:
@@ -147,9 +168,14 @@ public partial class MainWindow
                     break;
             }
         }
+        catch (OperationCanceledException ex)
+        {
+            UpdateUiProgress(type, 0, "업데이트 준비 취소: " + ex.Message);
+            AppendDetail(type, "준비 취소: " + ex.Message);
+        }
         catch (Exception ex)
         {
-            UpdateUiProgress(0, "업데이트 준비 실패: " + ex.Message);
+            UpdateUiProgress(type, 0, "업데이트 준비 실패: " + ex.Message);
             AppendDetail(type, "준비 실패: " + ex.Message);
             MessageBox.Show(this, ex.Message, $"{type} 업데이트", MessageBoxButton.OK, MessageBoxImage.Error);
         }
@@ -159,6 +185,37 @@ public partial class MainWindow
             RefreshPrimaryUpdateButtons();
         }
     }
+
+    internal async Task ResumeStartupUpdateAsync()
+    {
+        var resume = AdministratorPrivilege.GetStartupResumeUpdate();
+        if (resume is null || !AdministratorPrivilege.IsElevated) return;
+        if (!Enum.TryParse(resume.Value.Component, true, out XamppComponentType type)) return;
+
+        var combo = GetTargetComboBox(type);
+        var targets = combo.ItemsSource as IEnumerable<UpdateTargetOption>;
+        var target = targets?.FirstOrDefault(item => string.Equals(item.Version, resume.Value.Version, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            ShowComponent(type);
+            StatusText.Text = $"관리자 권한 재실행 후 {type} {resume.Value.Version} 대상 버전을 다시 찾지 못했습니다.";
+            return;
+        }
+
+        ShowComponent(type);
+        combo.SelectedItem = target;
+        RefreshPrimaryUpdateButtons();
+        AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] • 관리자 권한으로 업데이트 자동 재개: {target.Version}");
+        await Dispatcher.InvokeAsync(() => PrimaryUpdateButton_Click(GetPrimaryUpdateButton(type), new RoutedEventArgs()));
+    }
+
+    private Button GetPrimaryUpdateButton(XamppComponentType type) => type switch
+    {
+        XamppComponentType.Apache => ApachePrimaryUpdateButton,
+        XamppComponentType.Php => PhpPrimaryUpdateButton,
+        XamppComponentType.MariaDb => MariaDbPrimaryUpdateButton,
+        _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+    };
 
     private async Task<bool> RunAutomaticReviewAsync(
         XamppComponentType type,
@@ -179,6 +236,7 @@ public partial class MainWindow
                 var verified = await _apacheMigrationReviewService.BuildAsync(installation, target, package);
                 if (!verified.SyntaxValid) throw new InvalidOperationException("확정한 Apache 설정이 대상 버전 검증을 통과하지 못했습니다.");
             }
+            AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ Apache 마이그레이션 사전 검증 통과");
             AppendDetail(type, "Apache 마이그레이션 사전 검증 통과");
             return true;
         }
@@ -197,6 +255,7 @@ public partial class MainWindow
             {
                 _phpMigrationOverrideStore.Save(installation.RootPath, target.Version, currentIni, review.ProposedIni);
             }
+            AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ PHP 마이그레이션 사전 검증 통과");
             AppendDetail(type, $"PHP 마이그레이션 사전 검증 통과 / 사용자 확인 {review.NeedsReviewCount}");
             return true;
         }
@@ -212,9 +271,6 @@ public partial class MainWindow
         var serviceStopped = false;
         LogicalBackupManifest? logicalManifest = null;
 
-        if (isRunning && !AdministratorPrivilege.IsElevated)
-            throw new InvalidOperationException("MariaDB 안전 백업에는 관리자 권한이 필요합니다. 업데이트를 다시 실행하면 관리자 권한을 요청합니다.");
-
         try
         {
             if (isRunning)
@@ -229,6 +285,7 @@ public partial class MainWindow
                 if (!logical.Success || logical.FilePath is null || logical.Sha256 is null)
                     throw new InvalidOperationException("MariaDB 논리 백업 실패: " + logical.ErrorText);
                 logicalManifest = new LogicalBackupManifest(Path.GetRelativePath(report.BackupDestination, logical.FilePath), logical.Size, logical.Sha256);
+                AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ MariaDB 논리 백업 완료: {FormatBytes(logical.Size)}");
                 AppendDetail(type, $"논리 백업 완료: {FormatBytes(logical.Size)}");
             }
 
@@ -236,17 +293,22 @@ public partial class MainWindow
             {
                 await Task.Run(() => _windowsServiceController.Stop(report.ServiceName, TimeSpan.FromSeconds(30)));
                 serviceStopped = true;
+                AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] • MariaDB 서비스 중지 완료");
             }
 
             var stopped = await Task.Run(() => _preflightService.Inspect(_lastInstallation, type, target.Version));
             stopped = stopped with { BackupDestination = report.BackupDestination };
             var physical = await Task.Run(() => _backupService.CreateBackup(stopped, logicalManifest));
+            AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ MariaDB 물리 롤백 백업 완료: {physical.CopiedFiles:N0}개 / {FormatBytes(physical.CopiedBytes)}");
             AppendDetail(type, $"MariaDB 롤백 백업 완료: {physical.CopiedFiles:N0}개 / {FormatBytes(physical.CopiedBytes)}");
         }
         finally
         {
             if (serviceStopped && report.ServiceName is not null)
+            {
                 await Task.Run(() => _windowsServiceController.Start(report.ServiceName, TimeSpan.FromSeconds(30)));
+                AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ MariaDB 서비스 원상복구");
+            }
         }
 
         var backup = _backupLocator.FindLatest(_lastInstallation.RootPath, type, report.CurrentVersion, target.Version);
@@ -259,20 +321,22 @@ public partial class MainWindow
             new MariaDbMigrationReviewWindow(review) { Owner = this }.ShowDialog();
             throw new InvalidOperationException("MariaDB 마이그레이션 검토에서 해결이 필요한 항목이 있습니다.");
         }
+        AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ MariaDB 마이그레이션 사전 검토 통과");
         AppendDetail(type, "MariaDB 마이그레이션 사전 검토 통과");
     }
 
-    private void UpdateUiProgress(int percent, string message)
+    private void UpdateUiProgress(XamppComponentType type, int percent, string message)
     {
         UpdateProgressBar.Value = Math.Clamp(percent, 0, 100);
         ProgressPercentText.Text = $"{Math.Clamp(percent, 0, 100)}%";
         StatusText.Text = message;
+        AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] • {message}");
     }
 
     private void AppendVisibleLog(XamppComponentType type, string text)
     {
         if (!_activityLogs.TryGetValue(type, out var log)) return;
-        log.Add(text);
+        if (log.Count == 0 || !string.Equals(log[^1], text, StringComparison.Ordinal)) log.Add(text);
         if (type == _activeComponent) RefreshActivityLog();
     }
 
