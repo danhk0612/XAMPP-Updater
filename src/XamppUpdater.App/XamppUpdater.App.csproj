@@ -2,9 +2,11 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AssemblyName>XAMPP-Updater</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\XamppUpdater.Core\XamppUpdater.Core.csproj" />
