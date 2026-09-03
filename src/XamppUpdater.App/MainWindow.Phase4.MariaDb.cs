@@ -37,7 +37,7 @@ public partial class MainWindow
             Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
-            ToolTip = "논리/물리 백업과 검증된 패키지를 사용해 XAMPP 내부 MariaDB를 업데이트합니다."
+            ToolTip = "검토를 통과한 논리/물리 백업과 패키지로 XAMPP 내부 MariaDB를 업데이트합니다. major 업그레이드도 data 사본에서 검증 후 확정합니다."
         };
         _mariaDbExecuteButton.Click += MariaDbExecuteButton_Click;
         actionPanel.Children.Add(_mariaDbExecuteButton);
@@ -97,22 +97,16 @@ public partial class MainWindow
         }
 
         var backup = _backupLocator.FindLatest(_lastInstallation.RootPath, XamppComponentType.MariaDb, current, target.Version);
-        if (_mariaDbReviewButton is not null)
-            _mariaDbReviewButton.IsEnabled = backup?.Manifest.LogicalBackup is not null;
-
-        if (!IsSameMariaDbSeries(current, target.Version))
-        {
-            _mariaDbExecuteButton.IsEnabled = false;
-            _mariaDbExecuteButton.ToolTip = $"MariaDB {current} → {target.Version}는 중간 계열 패키지를 순차 적용하는 다음 Phase 4C 단계에서 실행합니다.";
-            return;
-        }
-
-        _mariaDbExecuteButton.IsEnabled = backup?.Manifest.LogicalBackup is not null;
+        var ready = backup?.Manifest.LogicalBackup is not null;
+        if (_mariaDbReviewButton is not null) _mariaDbReviewButton.IsEnabled = ready;
+        _mariaDbExecuteButton.IsEnabled = ready;
         _mariaDbExecuteButton.ToolTip = backup is null
             ? "현재/대상 버전에 일치하는 MariaDB 안전 백업을 먼저 생성하세요."
             : backup.Manifest.LogicalBackup is null
                 ? "전체 논리 백업 SQL이 포함된 MariaDB 안전 백업을 다시 생성하세요."
-                : "논리/물리 백업 무결성을 재검증한 뒤 MariaDB 바이너리와 data 사본을 업데이트합니다.";
+                : IsSameMariaDbSeries(current, target.Version)
+                    ? "동일 계열 패치 업데이트를 실행합니다."
+                    : $"MariaDB {current} → {target.Version} 직접 major 업그레이드입니다. 검토 후 data 사본에서 새 서버 기동/upgrade를 검증하고 실패 시 원본으로 롤백합니다.";
     }
 
     private void MariaDbReviewButton_Click(object sender, RoutedEventArgs e)
@@ -155,14 +149,6 @@ public partial class MainWindow
         var current = installation.Components.FirstOrDefault(item => item.Type == XamppComponentType.MariaDb)?.Version;
         if (string.IsNullOrWhiteSpace(current)) return;
 
-        if (!IsSameMariaDbSeries(current, target.Version))
-        {
-            MessageBox.Show(this,
-                $"MariaDB {current} → {target.Version}는 중간 계열 패키지를 순차 적용해야 합니다. 현재 첫 Phase 4C 실행 단계에서는 실제 파일을 변경하지 않습니다.",
-                "MariaDB 업데이트", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
         var backup = _backupLocator.FindLatest(installation.RootPath, XamppComponentType.MariaDb, current, target.Version);
         if (backup?.Manifest.LogicalBackup is null)
         {
@@ -189,8 +175,9 @@ public partial class MainWindow
             return;
         }
 
+        var directMajor = !IsSameMariaDbSeries(current, target.Version);
         var confirmation = MessageBox.Show(this,
-            $"XAMPP 내부 MariaDB를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
+            $"XAMPP 내부 MariaDB를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n방식: {(directMajor ? "직접 major 업그레이드" : "동일 계열 패치 업데이트")}\n\n" +
             "실행 전에 논리/물리 백업의 크기와 SHA256을 다시 검증합니다. 기존 mysql 디렉터리는 롤백 원본으로 그대로 유지하고, " +
             "새 패키지에는 data를 복사한 뒤 mariadb-upgrade/mysql_upgrade와 서비스 기동/버전 검증을 수행합니다. " +
             "입력한 DB 인증정보는 업그레이드 도구용 임시 option 파일에만 사용하고 즉시 삭제합니다. 실패하면 기존 mysql 디렉터리로 자동 롤백합니다. 계속하시겠습니까?",
@@ -209,6 +196,7 @@ public partial class MainWindow
         RefreshMariaDbExecuteEnabled();
         SetBusy(true, $"MariaDB {current} → {target.Version} 업데이트 준비 중...");
         Log($"실행 시작: MariaDB {current} → {target.Version}");
+        Log($"업데이트 방식: {(directMajor ? "직접 major 업그레이드" : "동일 계열 패치 업데이트")}");
         Log($"XAMPP 경로: {installation.RootPath}");
         Log($"패키지: {package.PackagePath}");
         Log($"패키지 SHA256: {package.Sha256}");
