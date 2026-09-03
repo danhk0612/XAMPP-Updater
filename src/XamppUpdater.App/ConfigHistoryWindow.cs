@@ -13,7 +13,7 @@ public sealed class ConfigHistoryWindow : Window
     private readonly XamppComponentType _type;
     private readonly IConfigSnapshotService _snapshots;
     private readonly IConfigSnapshotCompareService _compare = new ConfigSnapshotCompareService();
-    private readonly IConfigSnapshotRestoreService _restore = new ConfigSnapshotRestoreService();
+    private readonly ConfigSnapshotRestoreService _restore = new();
     private readonly ListBox _list = new() { SelectionMode = SelectionMode.Extended, MinWidth = 410 };
     private readonly TextBox _details = new()
     {
@@ -65,6 +65,7 @@ public sealed class ConfigHistoryWindow : Window
         AddButton(buttons, "메모 수정", (_, _) => EditSelectedNote());
         AddButton(buttons, "snapshot 폴더 열기", (_, _) => OpenSelectedFolder());
         AddButton(buttons, "snapshot 삭제", (_, _) => DeleteSelected());
+        AddButton(buttons, "항목 선택 병합", EntryMerge_Click);
         AddButton(buttons, "파일 선택 복원", SelectiveRestore_Click);
         AddButton(buttons, "전체 snapshot 복원", RestoreSelected_Click);
         var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), Margin = new Thickness(0, 0, 0, 6), IsCancel = true };
@@ -245,6 +246,57 @@ public sealed class ConfigHistoryWindow : Window
         MessageBox.Show(this,
             failures.Count == 0 ? $"snapshot {deleted:N0}개를 삭제했습니다." : $"삭제 완료: {deleted:N0}개\n삭제 실패: {failures.Count:N0}개\n\n{string.Join("\n", failures.Take(8))}",
             "snapshot 삭제", MessageBoxButton.OK, failures.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async void EntryMerge_Click(object sender, RoutedEventArgs e)
+    {
+        var snapshot = SingleSelected("항목 선택 병합");
+        if (snapshot is null) return;
+        if (!AdministratorPrivilege.EnsureElevated(this, _installation.RootPath, $"{_type} 설정 항목 병합")) return;
+
+        ConfigSnapshotManifest? current = null;
+        try
+        {
+            current = _snapshots.CaptureTemporary(_installation.RootPath, _type, CurrentVersion());
+            var items = new ConfigEntryMergeService().Compare(snapshot, current);
+            if (items.Count == 0)
+            {
+                MessageBox.Show(this, "자동 비교 가능한 설정 항목에서 차이를 찾지 못했습니다.", "설정 항목 병합", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new ConfigEntryMergeWindow(items) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            var selections = dialog.Selections;
+            var selectedCount = selections.Sum(x => x.Value.Count);
+            var answer = MessageBox.Show(this,
+                $"선택한 설정 항목 {selectedCount:N0}개를 snapshot 값으로 병합합니다.\n\n" +
+                "현재 전체 설정은 적용 직전에 안전 snapshot으로 저장되며, 적용 후 구성요소 검증에 실패하면 자동 원복합니다. 계속하시겠습니까?",
+                "설정 항목 병합", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes) return;
+
+            IsEnabled = false;
+            var result = await _restore.MergeEntriesAsync(_installation, snapshot, selections);
+            _details.Text = string.Join("\r\n", result.Steps) + (string.IsNullOrWhiteSpace(result.Error) ? string.Empty : "\r\n\r\n오류: " + result.Error);
+            ReloadSnapshots();
+            MessageBox.Show(this,
+                result.Success
+                    ? $"설정 항목 {selectedCount:N0}개 병합을 완료했습니다.\n\n병합 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n병합 후 snapshot:\n{result.AfterRestoreSnapshotPath}"
+                    : $"설정 항목 병합에 실패했습니다.\n\n{result.Error}\n\n" + (result.RolledBack ? "병합 직전 전체 설정으로 자동 원복했습니다." : "자동 원복도 완료되지 않았습니다."),
+                "설정 항목 병합", MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "설정 항목 병합", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+            if (current is not null)
+            {
+                try { _snapshots.Delete(current); } catch { }
+            }
+        }
     }
 
     private async void SelectiveRestore_Click(object sender, RoutedEventArgs e)
