@@ -15,15 +15,16 @@ public sealed class ManualSnapshotDialog : Window
 
     public string? Note => string.IsNullOrWhiteSpace(_note.Text) ? null : _note.Text.Trim();
 
-    public ManualSnapshotDialog(string componentName)
+    public ManualSnapshotDialog(string componentName, string? initialNote = null, bool editMode = false)
     {
-        Title = $"{componentName} 수동 snapshot";
+        Title = editMode ? $"{componentName} snapshot 메모 수정" : $"{componentName} 수동 snapshot";
         Width = 470;
         Height = 260;
         MinWidth = 420;
         MinHeight = 230;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.CanResizeWithGrip;
+        _note.Text = initialNote ?? string.Empty;
 
         var root = new Grid { Margin = new Thickness(14) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -32,7 +33,9 @@ public sealed class ManualSnapshotDialog : Window
 
         var label = new TextBlock
         {
-            Text = "이 snapshot을 구분할 메모를 입력하세요. 비워도 저장할 수 있습니다.",
+            Text = editMode
+                ? "snapshot 메모를 수정하세요. 비우면 메모가 제거됩니다."
+                : "이 snapshot을 구분할 메모를 입력하세요. 비워도 저장할 수 있습니다.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -56,6 +59,10 @@ public sealed class ManualSnapshotDialog : Window
         root.Children.Add(buttons);
 
         Content = root;
-        Loaded += (_, _) => _note.Focus();
+        Loaded += (_, _) =>
+        {
+            _note.Focus();
+            _note.CaretIndex = _note.Text.Length;
+        };
     }
 }
