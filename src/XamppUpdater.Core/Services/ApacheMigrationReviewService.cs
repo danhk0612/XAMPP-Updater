@@ -358,6 +358,14 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     {
         if (!File.Exists(executable)) throw new FileNotFoundException("httpd.exe를 찾을 수 없습니다.", executable);
         var start = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = workingDirectory };
+        var binDirectory = Path.GetDirectoryName(executable);
+        if (!string.IsNullOrWhiteSpace(binDirectory))
+        {
+            var currentPath = start.Environment["PATH"] ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            start.Environment["PATH"] = string.IsNullOrWhiteSpace(currentPath)
+                ? binDirectory
+                : binDirectory + Path.PathSeparator + currentPath;
+        }
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         process.Start();
