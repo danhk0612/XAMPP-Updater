@@ -32,8 +32,8 @@ public static class UpdateTargetPlanner
         if (next <= current)
         {
             return new UpdatePlan(type, currentVersion, target.Version, CandidateCompatibilityStatus.ManualReview,
-                new[] { new UpdatePlanStep(UpdatePlanStepKind.UserConfirmation, "다운그레이드 확인", "대상 버전이 현재 버전보다 낮거나 같습니다. 일반 업데이트 경로로 처리하지 않습니다.") },
-                "업데이트 대상이 현재 버전보다 높지 않습니다.");
+                new[] { new UpdatePlanStep(UpdatePlanStepKind.UserConfirmation, "다운그레이드 차단", "대상 버전이 현재 버전보다 낮거나 같습니다. XAMPP Updater의 일반 업데이트 경로에서는 다운그레이드 또는 동일 버전 재설치를 지원하지 않습니다.") },
+                "현재 버전보다 높은 버전만 업데이트할 수 있습니다.");
         }
 
         return type switch
@@ -53,17 +53,16 @@ public static class UpdateTargetPlanner
         SelectableVersionCatalog? selectableVersions)
     {
         var installedComponent = installation.Components.First(item => item.Type == type);
-        if (!installedComponent.IsInstalled || string.IsNullOrWhiteSpace(installedComponent.Version))
+        if (!installedComponent.IsInstalled || string.IsNullOrWhiteSpace(installedComponent.Version) ||
+            !Version.TryParse(installedComponent.Version, out var installedVersion))
         {
             return Array.Empty<UpdateTargetOption>();
         }
 
-        var installed = installedComponent.Version;
         var onlineVersion = online.Components.First(item => item.Type == type);
         var candidate = candidates.Candidates.First(item => item.Type == type);
         var options = new Dictionary<string, UpdateTargetOption>(StringComparer.OrdinalIgnoreCase);
 
-        Add(installed, "현재 설치", UpdateTargetSource.Installed, false, true);
         Add(candidate.Version, "현재 계열 추천", UpdateTargetSource.SameSeriesCandidate, false,
             candidate.DownloadUrl is not null, candidate.DownloadUrl, candidate.FileName);
         Add(onlineVersion.XamppBundledVersion, "XAMPP 공식 기준", UpdateTargetSource.XamppBundle, false, false);
@@ -88,7 +87,11 @@ public static class UpdateTargetPlanner
         void Add(string? version, string label, UpdateTargetSource source, bool isLatest, bool packageResolved,
             string? packageUrl = null, string? packageFileName = null, bool isEol = false)
         {
-            if (string.IsNullOrWhiteSpace(version)) return;
+            if (string.IsNullOrWhiteSpace(version) || !Version.TryParse(version, out var parsed) || parsed <= installedVersion)
+                return;
+
+            if (type == XamppComponentType.MariaDb && isEol)
+                return;
 
             if (options.TryGetValue(version, out var existing))
             {
@@ -171,19 +174,19 @@ public static class UpdateTargetPlanner
             Auto("전체 백업", "mysql 설정과 data 디렉터리를 백업하고 필요 시 논리 백업도 생성합니다."),
             Auto("업그레이드 경로 계산", sameSeries
                 ? "동일 major.minor 패치 경로로 직접 업데이트합니다."
-                : "현재 버전에서 대상 버전까지 필요한 중간 MariaDB 계열과 순서를 계산합니다."),
+                : "현재 버전에서 대상 버전까지 직접 업그레이드 가능 여부를 사전 검증합니다."),
             target.PackageResolved
-                ? Assist("단계별 패키지 준비", "선택 버전 및 필요한 중간 버전의 공식 Windows 패키지를 순서대로 준비합니다.")
-                : Assist("패키지 확인", "각 단계에 필요한 공식 Windows 패키지를 자동으로 확인해 준비합니다."),
-            Assist("단계별 바이너리 교체", "각 단계에서 설정/서비스 경로를 유지하며 바이너리를 순차 교체합니다."),
-            Auto("업그레이드 도구", "각 단계에서 지원되는 mariadb-upgrade/mysql_upgrade 계열 도구를 실행합니다."),
+                ? Assist("대상 패키지 준비", "선택 버전의 공식 Windows 패키지를 준비합니다.")
+                : Assist("패키지 확인", "대상 버전의 공식 Windows 패키지를 자동으로 확인해 준비합니다."),
+            Assist("바이너리 교체", "설정/서비스 경로를 유지하며 새 바이너리와 data 사본을 준비합니다."),
+            Auto("업그레이드 도구", "mariadb-upgrade/mysql_upgrade 계열 도구를 실행합니다."),
             Auto("상태 검증", "서버 기동, 시스템 테이블, 사용자 DB 접근과 오류 로그를 확인합니다."),
             Confirm("문제 항목 확인", "스토리지 엔진/옵션 제거 등 자동 변환할 수 없는 변경만 사용자 확인 대상으로 남깁니다."),
-            Auto("롤백 지점", "각 단계별 백업 지점을 유지해 실패 시 직전 정상 단계로 되돌립니다.")
+            Auto("롤백", "실패 시 업데이트 전 원본 mysql 디렉터리와 검증된 백업으로 되돌립니다.")
         };
         var summary = sameSeries
             ? $"MariaDB {currentVersion} → {target.Version}: 동일 계열 패치 업데이트 경로입니다."
-            : $"MariaDB {currentVersion} → {target.Version}: 필요한 중간 버전을 포함한 단계적 보조 업데이트 경로를 계산합니다.";
+            : $"MariaDB {currentVersion} → {target.Version}: 직접 major 업그레이드를 사전 검증하고 실패 시 원본으로 롤백합니다.";
         return new UpdatePlan(XamppComponentType.MariaDb, currentVersion, target.Version, CandidateCompatibilityStatus.Assisted, steps, summary);
     }
 
