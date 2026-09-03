@@ -1,3 +1,4 @@
+using System.Windows;
 using XamppUpdater.Core.Services;
 
 namespace XamppUpdater.App;
@@ -5,6 +6,12 @@ namespace XamppUpdater.App;
 public partial class MainWindow
 {
     private bool _updateProgressSubscribed;
+
+    protected override void OnInitialized(EventArgs e)
+    {
+        base.OnInitialized(e);
+        InitializeUpdateProgressUi();
+    }
 
     private void InitializeUpdateProgressUi()
     {
