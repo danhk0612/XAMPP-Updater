@@ -24,13 +24,14 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
         var current = component.Version ?? backup.Manifest.CurrentVersion;
         var mysqlRoot = Path.Combine(installation.RootPath, "mysql");
         var dataRoot = Path.Combine(mysqlRoot, "data");
-        var configs = new[]
+        var configPaths = new[]
         {
             Path.Combine(mysqlRoot, "bin", "my.ini"),
             Path.Combine(mysqlRoot, "my.ini"),
             Path.Combine(mysqlRoot, "bin", "my.cnf"),
             Path.Combine(mysqlRoot, "my.cnf")
-        }.Where(File.Exists).Select(path => Path.GetRelativePath(mysqlRoot, path)).ToArray();
+        }.Where(File.Exists).ToArray();
+        var configs = configPaths.Select(path => Path.GetRelativePath(mysqlRoot, path)).ToArray();
 
         var automatic = new List<string>();
         var review = new List<string>();
@@ -45,7 +46,7 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
         var sameSeries = IsSameSeries(current, target.Version);
         automatic.Add(sameSeries
             ? $"동일 계열 패치 업데이트: {current} → {target.Version}"
-            : $"직접 major 업그레이드: {current} → {target.Version}. MariaDB 공식 정책상 이전 버전에서 최신 버전으로 직접 업그레이드가 가능하며, 새 data 사본에서만 기동/업그레이드를 수행합니다.");
+            : $"직접 major 업그레이드: {current} → {target.Version}. 기존 data 원본은 유지하고 새 data 사본에서만 기동/업그레이드를 수행합니다.");
 
         var logical = backup.Manifest.LogicalBackup;
         if (logical is null)
@@ -59,6 +60,26 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
             review.Add("대상 패키지에서 mariadb-upgrade/mysql_upgrade를 찾지 못했습니다.");
         else
             automatic.Add($"업그레이드 도구 사용: {upgradeTool}");
+
+        if (configPaths.Length > 0)
+        {
+            var effectiveConfig = configPaths[0];
+            var configValidation = MariaDbTargetConfigValidator.Validate(package.PackagePath, effectiveConfig);
+            if (configValidation.Valid)
+            {
+                automatic.Add($"대상 MariaDB {target.Version} 바이너리로 현재 설정 사전 파싱 검증 통과: {Path.GetRelativePath(mysqlRoot, effectiveConfig)}");
+            }
+            else
+            {
+                review.Add(
+                    $"대상 MariaDB {target.Version}에서 현재 설정을 안전하게 파싱하지 못했습니다: " +
+                    $"{Path.GetRelativePath(mysqlRoot, effectiveConfig)} / {configValidation.Error ?? Compact(configValidation.Output)}");
+            }
+        }
+        else
+        {
+            automatic.Add("현재 사용자 MariaDB 설정 파일이 없어 대상 바이너리 설정 호환성 검사는 생략합니다.");
+        }
 
         automatic.Add("업그레이드 DB 인증정보는 실행 직전에 입력하며 디스크에 영구 저장하지 않습니다.");
 
@@ -103,6 +124,12 @@ public sealed class MariaDbMigrationReviewService : IMariaDbMigrationReviewServi
         Version.TryParse(currentVersion, out var current) &&
         Version.TryParse(targetVersion, out var target) &&
         current.Major == target.Major && current.Minor == target.Minor;
+
+    private static string Compact(string value)
+    {
+        var normalized = value.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        return normalized.Length <= 500 ? normalized : normalized[..500] + "...";
+    }
 }
 
 public sealed record MariaDbMigrationReviewResult(
