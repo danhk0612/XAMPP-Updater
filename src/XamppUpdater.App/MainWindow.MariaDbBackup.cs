@@ -42,8 +42,11 @@ public partial class MainWindow
                 throw new InvalidOperationException(
                     "MariaDB 프로세스가 실행 중이지만 관리 가능한 Windows 서비스를 찾지 못했습니다. 안전한 물리 백업을 위해 먼저 MariaDB를 중지해야 합니다.");
 
-            LogicalBackupManifest? logicalManifest = null;
             var isRunning = report.ProcessRunning || report.ServiceState?.Contains("RUNNING", StringComparison.OrdinalIgnoreCase) == true;
+            if (isRunning && !AdministratorPrivilege.EnsureElevated(this, _lastInstallation.RootPath, "MariaDB 서비스 중지 및 물리 백업"))
+                return;
+
+            LogicalBackupManifest? logicalManifest = null;
 
             if (isRunning)
             {
