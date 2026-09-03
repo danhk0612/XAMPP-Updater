@@ -6,6 +6,10 @@ namespace XamppUpdater.App;
 
 public sealed class MariaDbCredentialsDialog : Window
 {
+    private static readonly object CacheLock = new();
+    private static MariaDbCredentials? _oneShotCredentials;
+    private static DateTimeOffset _oneShotExpiresAt;
+
     private readonly TextBox _userName = new() { Text = "root", MinWidth = 260 };
     private readonly PasswordBox _password = new() { MinWidth = 260 };
     private readonly TaskCompletionSource<MariaDbCredentials?> _completion =
@@ -26,7 +30,7 @@ public sealed class MariaDbCredentialsDialog : Window
         var panel = new StackPanel { Margin = new Thickness(20) };
         panel.Children.Add(new TextBlock
         {
-            Text = "MariaDB 논리 백업 또는 업그레이드 도구 실행에 사용할 계정을 입력하세요. 인증정보는 영구 저장하지 않습니다.",
+            Text = "MariaDB 논리 백업 또는 업그레이드 도구 실행에 사용할 계정을 입력하세요. 인증정보는 영구 저장하지 않으며 현재 작업에서 한 번 재사용할 수 있습니다.",
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 14)
         });
@@ -55,6 +59,11 @@ public sealed class MariaDbCredentialsDialog : Window
         ok.Click += (_, _) =>
         {
             _acceptedCredentials = new MariaDbCredentials(_userName.Text.Trim(), _password.Password);
+            lock (CacheLock)
+            {
+                _oneShotCredentials = _acceptedCredentials;
+                _oneShotExpiresAt = DateTimeOffset.UtcNow.AddMinutes(3);
+            }
             Close();
         };
 
@@ -68,10 +77,32 @@ public sealed class MariaDbCredentialsDialog : Window
 
     public static Task<MariaDbCredentials?> RequestAsync(Window owner)
     {
+        lock (CacheLock)
+        {
+            if (_oneShotCredentials is not null && DateTimeOffset.UtcNow <= _oneShotExpiresAt)
+            {
+                var cached = _oneShotCredentials;
+                _oneShotCredentials = null;
+                _oneShotExpiresAt = default;
+                return Task.FromResult<MariaDbCredentials?>(cached);
+            }
+            _oneShotCredentials = null;
+            _oneShotExpiresAt = default;
+        }
+
         var dialog = new MariaDbCredentialsDialog(owner);
         dialog.Show();
         dialog.Activate();
         _ = dialog._password.Focus();
         return dialog._completion.Task;
+    }
+
+    public static void ClearCachedCredentials()
+    {
+        lock (CacheLock)
+        {
+            _oneShotCredentials = null;
+            _oneShotExpiresAt = default;
+        }
     }
 }
