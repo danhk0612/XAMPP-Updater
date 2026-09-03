@@ -10,6 +10,8 @@ namespace XamppUpdater.App;
 public partial class MainWindow
 {
     private readonly IMariaDbUpdateExecutor _mariaDbUpdateExecutor = new MariaDbUpdateExecutor();
+    private readonly IMariaDbMigrationReviewService _mariaDbMigrationReviewService = new MariaDbMigrationReviewService();
+    private Button? _mariaDbReviewButton;
     private Button? _mariaDbExecuteButton;
     private Button? _mariaDbLogButton;
     private bool _mariaDbUpdateRunning;
@@ -18,13 +20,24 @@ public partial class MainWindow
     {
         if (_mariaDbExecuteButton is not null || MariaDbDiffButton.Parent is not Panel actionPanel) return;
 
+        _mariaDbReviewButton = new Button
+        {
+            Content = "마이그레이션 검토",
+            Margin = new Thickness(0, 0, 8, 6),
+            Padding = new Thickness(12, 5, 12, 5),
+            IsEnabled = false,
+            ToolTip = "대상 패키지, data/설정 보존, 논리·물리 백업, 업그레이드 도구와 서비스 조건을 실제 교체 전에 검토합니다."
+        };
+        _mariaDbReviewButton.Click += MariaDbReviewButton_Click;
+        actionPanel.Children.Add(_mariaDbReviewButton);
+
         _mariaDbExecuteButton = new Button
         {
             Content = "MariaDB 업데이트 실행",
             Margin = new Thickness(0, 0, 8, 6),
             Padding = new Thickness(12, 5, 12, 5),
             IsEnabled = false,
-            ToolTip = "논리/물리 백업과 검증된 패키지를 사용해 XAMPP 내부 MariaDB를 업데이트합니다. 현재 첫 실행 단계는 동일 major.minor 계열 패치 업데이트를 지원합니다."
+            ToolTip = "논리/물리 백업과 검증된 패키지를 사용해 XAMPP 내부 MariaDB를 업데이트합니다."
         };
         _mariaDbExecuteButton.Click += MariaDbExecuteButton_Click;
         actionPanel.Children.Add(_mariaDbExecuteButton);
@@ -61,6 +74,7 @@ public partial class MainWindow
         if (_mariaDbExecuteButton is null || _mariaDbUpdateRunning || _mariaDbBackupRunning || _lastInstallation is null)
         {
             if (_mariaDbExecuteButton is not null) _mariaDbExecuteButton.IsEnabled = false;
+            if (_mariaDbReviewButton is not null) _mariaDbReviewButton.IsEnabled = false;
             return;
         }
 
@@ -69,6 +83,7 @@ public partial class MainWindow
             !string.Equals(package.Version, target.Version, StringComparison.OrdinalIgnoreCase))
         {
             _mariaDbExecuteButton.IsEnabled = false;
+            if (_mariaDbReviewButton is not null) _mariaDbReviewButton.IsEnabled = false;
             return;
         }
 
@@ -77,8 +92,13 @@ public partial class MainWindow
         {
             _mariaDbExecuteButton.IsEnabled = false;
             _mariaDbExecuteButton.ToolTip = "현재 MariaDB 버전을 확인할 수 없습니다.";
+            if (_mariaDbReviewButton is not null) _mariaDbReviewButton.IsEnabled = false;
             return;
         }
+
+        var backup = _backupLocator.FindLatest(_lastInstallation.RootPath, XamppComponentType.MariaDb, current, target.Version);
+        if (_mariaDbReviewButton is not null)
+            _mariaDbReviewButton.IsEnabled = backup?.Manifest.LogicalBackup is not null;
 
         if (!IsSameMariaDbSeries(current, target.Version))
         {
@@ -87,13 +107,42 @@ public partial class MainWindow
             return;
         }
 
-        var backup = _backupLocator.FindLatest(_lastInstallation.RootPath, XamppComponentType.MariaDb, current, target.Version);
         _mariaDbExecuteButton.IsEnabled = backup?.Manifest.LogicalBackup is not null;
         _mariaDbExecuteButton.ToolTip = backup is null
             ? "현재/대상 버전에 일치하는 MariaDB 안전 백업을 먼저 생성하세요."
             : backup.Manifest.LogicalBackup is null
                 ? "전체 논리 백업 SQL이 포함된 MariaDB 안전 백업을 다시 생성하세요."
                 : "논리/물리 백업 무결성을 재검증한 뒤 MariaDB 바이너리와 data 사본을 업데이트합니다.";
+    }
+
+    private void MariaDbReviewButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_lastInstallation is null || MariaDbTargetComboBox.SelectedItem is not UpdateTargetOption target ||
+            !_packageResults.TryGetValue(XamppComponentType.MariaDb, out var package)) return;
+
+        var current = _lastInstallation.Components.FirstOrDefault(item => item.Type == XamppComponentType.MariaDb)?.Version;
+        if (string.IsNullOrWhiteSpace(current)) return;
+        var backup = _backupLocator.FindLatest(_lastInstallation.RootPath, XamppComponentType.MariaDb, current, target.Version);
+        if (backup?.Manifest.LogicalBackup is null)
+        {
+            MessageBox.Show(this, "MariaDB 논리/물리 안전 백업을 먼저 생성하세요.", "MariaDB 마이그레이션 검토", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            var review = _mariaDbMigrationReviewService.Build(_lastInstallation, target, package, backup);
+            new MariaDbMigrationReviewWindow(review) { Owner = this }.ShowDialog();
+            AppendDetail(XamppComponentType.MariaDb,
+                $"MariaDB 마이그레이션 검토: 사용자 확인 {review.ReviewItems.Count} / 자동 처리 {review.AutomaticItems.Count} / 실행 가능={review.CanExecute}");
+            StatusText.Text = review.CanExecute
+                ? $"MariaDB {current} → {target.Version} 마이그레이션 검토 통과"
+                : "MariaDB 마이그레이션 검토에서 해결이 필요한 항목이 있습니다.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "MariaDB 마이그레이션 검토", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private async void MariaDbExecuteButton_Click(object sender, RoutedEventArgs e)
@@ -124,10 +173,27 @@ public partial class MainWindow
             return;
         }
 
+        var review = _mariaDbMigrationReviewService.Build(installation, target, package, backup);
+        if (!review.CanExecute)
+        {
+            new MariaDbMigrationReviewWindow(review) { Owner = this }.ShowDialog();
+            MessageBox.Show(this, "마이그레이션 검토에서 해결이 필요한 항목이 있어 실제 업데이트를 실행하지 않습니다.",
+                "MariaDB 업데이트", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var credentials = await MariaDbCredentialsDialog.RequestAsync(this);
+        if (credentials is null)
+        {
+            StatusText.Text = "MariaDB 업데이트 취소: 업그레이드 인증정보 입력이 취소되었습니다.";
+            return;
+        }
+
         var confirmation = MessageBox.Show(this,
             $"XAMPP 내부 MariaDB를 실제로 업데이트합니다.\n\n현재: {current}\n대상: {target.Version}\n\n" +
             "실행 전에 논리/물리 백업의 크기와 SHA256을 다시 검증합니다. 기존 mysql 디렉터리는 롤백 원본으로 그대로 유지하고, " +
-            "새 패키지에는 data를 복사한 뒤 mariadb-upgrade/mysql_upgrade와 서비스 기동/버전 검증을 수행합니다. 실패하면 기존 mysql 디렉터리로 자동 롤백합니다. 계속하시겠습니까?",
+            "새 패키지에는 data를 복사한 뒤 mariadb-upgrade/mysql_upgrade와 서비스 기동/버전 검증을 수행합니다. " +
+            "입력한 DB 인증정보는 업그레이드 도구용 임시 option 파일에만 사용하고 즉시 삭제합니다. 실패하면 기존 mysql 디렉터리로 자동 롤백합니다. 계속하시겠습니까?",
             "MariaDB 업데이트 실행", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirmation != MessageBoxResult.Yes) return;
 
@@ -148,6 +214,7 @@ public partial class MainWindow
         Log($"패키지 SHA256: {package.Sha256}");
         Log($"롤백 manifest: {backup.ManifestPath}");
         Log($"논리 백업: {backup.Manifest.LogicalBackup.RelativePath} / SHA256 {backup.Manifest.LogicalBackup.Sha256}");
+        Log($"업그레이드 DB 사용자: {credentials.UserName} / 암호는 저장하지 않음");
 
         var stopwatch = Stopwatch.StartNew();
         var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
@@ -157,7 +224,8 @@ public partial class MainWindow
 
         try
         {
-            var result = await Task.Run(async () => await _mariaDbUpdateExecutor.ExecuteAsync(installation, target, package, backup));
+            var result = await Task.Run(async () =>
+                await _mariaDbUpdateExecutor.ExecuteAsync(installation, target, package, backup, credentials));
             timer.Stop();
             foreach (var step in result.Steps) Log("실행: " + step);
             foreach (var warning in result.Warnings) Log("주의: " + warning);
