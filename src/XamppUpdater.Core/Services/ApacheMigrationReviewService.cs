@@ -114,6 +114,18 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
 
             var httpd = Path.Combine(stagedRoot, "bin", "httpd.exe");
             var validation = await RunAsync(httpd, new[] { "-t", "-f", mainConf }, stagedRoot, cancellationToken);
+            if (validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase) &&
+                TryRepairMissingModuleDependencies(stagedRoot, validation.Output, items))
+            {
+                items.Add(new ApacheMigrationReviewItem(
+                    ApacheMigrationReviewKind.AutomaticChange,
+                    "누락 종속 DLL 자동 배치 후 httpd -t 재검증"));
+                validation = await RunAsync(httpd, new[] { "-t", "-f", mainConf }, stagedRoot, cancellationToken);
+            }
+
+            if (validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase))
+                AddModuleDependencyDiagnostics(stagedRoot, validation.Output, items);
+
             var syntaxValid = validation.ExitCode == 0 &&
                               !validation.Output.Contains("Syntax error", StringComparison.OrdinalIgnoreCase) &&
                               !validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase);
@@ -215,6 +227,109 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         return result.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
     }
 
+    private static bool TryRepairMissingModuleDependencies(
+        string stagedRoot,
+        string validationOutput,
+        ICollection<ApacheMigrationReviewItem> items)
+    {
+        var module = ResolveFailedModule(stagedRoot, validationOutput);
+        if (module is null || !File.Exists(module)) return false;
+
+        var searchDirectories = GetDependencySearchDirectories(stagedRoot, module);
+        var missing = PeDependencyInspector.FindMissingDependencies(module, searchDirectories);
+        var copied = false;
+        foreach (var item in missing)
+        {
+            var source = PeDependencyInspector.FindAnywhere(stagedRoot, item.DependencyName);
+            if (source is null) continue;
+            var destination = Path.Combine(stagedRoot, "bin", item.DependencyName);
+            if (File.Exists(destination) || string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination), StringComparison.OrdinalIgnoreCase)) continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(source, destination, overwrite: true);
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.AutomaticChange,
+                $"모듈 종속 DLL 자동 배치: {item.DependencyName} → bin/{item.DependencyName}"));
+            copied = true;
+        }
+        return copied;
+    }
+
+    private static void AddModuleDependencyDiagnostics(
+        string stagedRoot,
+        string validationOutput,
+        ICollection<ApacheMigrationReviewItem> items)
+    {
+        var module = ResolveFailedModule(stagedRoot, validationOutput);
+        if (module is null)
+        {
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.NeedsReview,
+                "로드 실패한 Apache 모듈 경로를 오류 출력에서 해석하지 못했습니다."));
+            return;
+        }
+
+        var relativeModule = Path.GetRelativePath(stagedRoot, module).Replace('\\', '/');
+        if (!File.Exists(module))
+        {
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.NeedsReview,
+                $"로드 대상 모듈 파일이 새 패키지에 없습니다: {relativeModule}"));
+            return;
+        }
+
+        var imports = PeDependencyInspector.ReadImports(module);
+        if (imports.Count > 0)
+        {
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.AutomaticChange,
+                $"{relativeModule} 직접 종속 DLL: {string.Join(", ", imports)}"));
+        }
+
+        var missing = PeDependencyInspector.FindMissingDependencies(module, GetDependencySearchDirectories(stagedRoot, module));
+        if (missing.Count == 0)
+        {
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.NeedsReview,
+                $"{relativeModule} 파일과 PE 직접/연쇄 종속 DLL은 확인됐지만 Windows 로더가 모듈을 로드하지 못했습니다. 다음 단계에서 ABI/로더 오류를 추가 확인해야 합니다."));
+            return;
+        }
+
+        foreach (var dependency in missing)
+        {
+            var owner = Path.GetRelativePath(stagedRoot, dependency.BinaryPath).Replace('\\', '/');
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.NeedsReview,
+                $"누락 종속 DLL: {dependency.DependencyName} (요청 파일: {owner})"));
+        }
+    }
+
+    private static string? ResolveFailedModule(string stagedRoot, string validationOutput)
+    {
+        var match = CannotLoadModuleRegex().Match(validationOutput);
+        if (!match.Success) return null;
+        var configured = match.Groups["path"].Value.Trim().Trim('"', '\'').Replace('/', Path.DirectorySeparatorChar);
+        if (Path.IsPathFullyQualified(configured)) return configured;
+        var path = Path.GetFullPath(Path.Combine(stagedRoot, configured));
+        return IsUnderRoot(path, stagedRoot) ? path : null;
+    }
+
+    private static IReadOnlyList<string> GetDependencySearchDirectories(string stagedRoot, string module)
+    {
+        var result = new List<string>
+        {
+            Path.GetDirectoryName(module) ?? stagedRoot,
+            Path.Combine(stagedRoot, "bin"),
+            stagedRoot,
+            Environment.SystemDirectory
+        };
+        if (Environment.Is64BitOperatingSystem)
+            result.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "SysWOW64"));
+        var pathValue = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrWhiteSpace(pathValue))
+            result.AddRange(pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        return result.Where(Directory.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
     private static void CopyDirectory(string source, string destination)
     {
         Directory.CreateDirectory(destination);
@@ -259,4 +374,6 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     private static partial Regex ServerRootRegex();
     [GeneratedRegex(@"^\s*LoadModule\s+\S+\s+(?<path>[^#]+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex LoadModuleRegex();
+    [GeneratedRegex(@"Cannot load\s+(?<path>[^\s]+)\s+into server", RegexOptions.IgnoreCase)]
+    private static partial Regex CannotLoadModuleRegex();
 }
