@@ -10,6 +10,11 @@ public interface ICandidatePackageCatalogService
         XamppInstallation installation,
         InstallationCompatibilityProfile profile,
         CancellationToken cancellationToken = default);
+
+    Task<PackageCandidate> ResolveApacheVersionAsync(
+        string version,
+        InstallationCompatibilityProfile profile,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed partial class CandidatePackageCatalogService : ICandidatePackageCatalogService
@@ -39,10 +44,30 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             new[] { await apacheTask, await phpTask, await mariaDbTask });
     }
 
+    public async Task<PackageCandidate> ResolveApacheVersionAsync(
+        string version,
+        InstallationCompatibilityProfile profile,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var html = await GetStringAsync("https://www.apachelounge.com/download/", cancellationToken);
+            return ParseApacheLoungeCandidate(html, profile.ApacheArchitecture, installedVersion: null, exactVersion: version);
+        }
+        catch (Exception ex)
+        {
+            return Unavailable(
+                XamppComponentType.Apache,
+                profile.ApacheArchitecture,
+                $"Apache {version} 패키지 재조회 실패: {ex.Message}");
+        }
+    }
+
     internal static PackageCandidate ParseApacheLoungeCandidate(
         string html,
         BinaryArchitecture architecture,
-        string? installedVersion)
+        string? installedVersion,
+        string? exactVersion = null)
     {
         var expectedArch = architecture switch
         {
@@ -67,12 +92,17 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
                 Parsed = Version.TryParse(match.Groups["version"].Value, out var version) ? version : null
             })
             .Where(item => item.Parsed is not null && item.Architecture.Equals(expectedArch, StringComparison.OrdinalIgnoreCase))
+            .Where(item => exactVersion is null || string.Equals(item.VersionText, exactVersion, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(item => item.Parsed)
+            .ThenByDescending(item => item.FileName, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
 
         if (candidate is null)
         {
-            return Unavailable(XamppComponentType.Apache, architecture, "Apache Lounge에서 현재 아키텍처의 Windows ZIP을 찾지 못했습니다.");
+            var reason = exactVersion is null
+                ? "Apache Lounge에서 현재 아키텍처의 Windows ZIP을 찾지 못했습니다."
+                : $"Apache Lounge에서 Apache {exactVersion} / {expectedArch} Windows ZIP을 찾지 못했습니다.";
+            return Unavailable(XamppComponentType.Apache, architecture, reason);
         }
 
         var sameSeries = SameMajorMinor(installedVersion, candidate.VersionText);
@@ -88,10 +118,12 @@ public sealed partial class CandidatePackageCatalogService : ICandidatePackageCa
             null,
             null,
             "https://www.apachelounge.com/download/",
-            sameSeries ? CandidateCompatibilityStatus.Assisted : CandidateCompatibilityStatus.ManualReview,
-            sameSeries
-                ? "같은 Apache 2.4 계열의 Windows 바이너리입니다. 자동 백업 후 새 패키지와 기존 모듈/설정을 비교하고, PHP/추가 모듈 ABI 검사를 통과한 항목은 자동 교체하며 불일치 항목만 사용자 확인을 받는 보조 업데이트 대상으로 처리합니다."
-                : "현재 Apache와 계열이 다릅니다. 패키지 구조와 설정 차이를 비교해 마이그레이션 항목을 만든 뒤 사용자 확인을 거치는 수동 검토 업데이트 대상으로 처리합니다.");
+            installedVersion is null || sameSeries ? CandidateCompatibilityStatus.Assisted : CandidateCompatibilityStatus.ManualReview,
+            installedVersion is null
+                ? $"Apache {candidate.VersionText} Windows 패키지를 선택 버전에 맞춰 다시 확인했습니다."
+                : sameSeries
+                    ? "같은 Apache 2.4 계열의 Windows 바이너리입니다. 자동 백업 후 새 패키지와 기존 모듈/설정을 비교하고, PHP/추가 모듈 ABI 검사를 통과한 항목은 자동 교체하며 불일치 항목만 사용자 확인을 받는 보조 업데이트 대상으로 처리합니다."
+                    : "현재 Apache와 계열이 다릅니다. 패키지 구조와 설정 차이를 비교해 마이그레이션 항목을 만든 뒤 사용자 확인을 거치는 수동 검토 업데이트 대상으로 처리합니다.");
     }
 
     internal static PackageCandidate ParsePhpArchiveCandidate(
