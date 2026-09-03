@@ -175,7 +175,35 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 
 ## Phase 6 — Packaging & Release
 
-- [ ] self-contained 배포 방식 결정
-- [ ] 앱 자체 업데이트
-- [ ] 로그/진단 정보 내보내기
-- [ ] 릴리스 빌드 및 GitHub Actions 정리
+구현은 대부분 완료했다. 일반 branch/PR CI에서 빌드·smoke test·self-contained publish·EXE 검증·artifact 업로드까지 확인했으며, 실제 `v*` 태그 릴리스와 구버전 EXE에서의 자체 업데이트 왕복 검증을 최종 확인 항목으로 남긴다.
+
+- [x] self-contained 배포 방식 결정
+  - win-x64
+  - .NET 8 self-contained
+  - single-file `XAMPP-Updater.exe`
+- [x] 앱 자체 업데이트 구현
+  - GitHub latest release 조회
+  - `XAMPP-Updater.exe` + `XAMPP-Updater.exe.sha256` 다운로드
+  - 다운로드 진행률/용량 표시 및 다운로드 단계 취소
+  - SHA256 검증 이후 취소 차단
+  - 검증 완료 후 5초 자동 재시작 + 즉시 재시작
+  - 현재 EXE 교체 및 `.update-backup` 기반 실패 복원
+- [x] 로그/진단 정보 내보내기
+  - 앱/OS/권한/XAMPP 감지 요약
+  - 현재 세션 작업 로그
+  - 영구 실행 로그
+  - 자체 업데이트 로그
+  - 설정 원문/DB/롤백 백업/다운로드 패키지/인증정보 제외
+- [x] 릴리스 빌드 및 GitHub Actions 정리
+  - restore/build/smoke test
+  - win-x64 self-contained publish
+  - publish된 `XAMPP-Updater.exe` 버전 검증
+  - 일반 빌드 artifact 업로드
+  - `v*` 태그에서 SHA256 생성 및 GitHub Release asset 게시 구성
+- [ ] 실제 `v*` 태그 빌드에서 GitHub Release EXE/SHA256 게시 확인
+- [ ] 구버전 배포 EXE → 신규 GitHub Release 자체 업데이트 왕복 확인
+  - 다운로드 진행률 및 취소
+  - SHA256 검증
+  - 5초/즉시 재시작
+  - EXE 교체
+  - 실패 시 `.update-backup` 복원
