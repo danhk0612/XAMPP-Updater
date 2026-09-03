@@ -41,11 +41,16 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
         var component = installation.Components.First(item => item.Type == XamppComponentType.MariaDb);
         var currentVersion = component.Version ?? backup.Manifest.CurrentVersion;
         ValidateInputs(installation, target, package, backup, currentVersion);
-        EnsureSameSeries(currentVersion, target.Version);
         VerifyBackupIntegrity(backup);
 
         var steps = new List<string>();
         var warnings = new List<string>();
+        var directMajorUpgrade = !IsSameSeries(currentVersion, target.Version);
+        if (directMajorUpgrade)
+        {
+            warnings.Add($"MariaDB 직접 major 업그레이드 경로: {currentVersion} → {target.Version}. 기존 data 원본은 수정하지 않고 복사본에서만 새 서버 기동과 업그레이드 도구를 실행합니다.");
+        }
+
         var xamppRoot = Path.GetFullPath(installation.RootPath);
         var mysqlRoot = Path.Combine(xamppRoot, "mysql");
         var serviceName = component.ServiceName;
@@ -224,12 +229,6 @@ public sealed class MariaDbUpdateExecutor : IMariaDbUpdateExecutor
     internal static bool IsSameSeries(string currentVersion, string targetVersion) =>
         Version.TryParse(currentVersion, out var current) && Version.TryParse(targetVersion, out var target) &&
         current.Major == target.Major && current.Minor == target.Minor;
-
-    private static void EnsureSameSeries(string currentVersion, string targetVersion)
-    {
-        if (!IsSameSeries(currentVersion, targetVersion))
-            throw new InvalidOperationException($"MariaDB {currentVersion} → {targetVersion}는 중간 계열을 순차 적용해야 합니다. 현재 Phase 4C 첫 실행기는 동일 major.minor 패치 경로만 실행하며 교차 계열은 파일 변경 전에 중단합니다.");
-    }
 
     private static void ValidateInputs(XamppInstallation installation, UpdateTargetOption target, PackagePreparationResult package, BackupResult backup, string currentVersion)
     {
