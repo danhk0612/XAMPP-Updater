@@ -173,14 +173,14 @@ public sealed class ComponentRollbackService : IComponentRollbackService
 
             var updated = Regex.Replace(
                 original,
-                @"(?im)^\s*LoadModule\s+php(?:\d+)?_module\s+[^\r\n]+$",
+                @"(?im)^\s*LoadModule\s+\S+\s+[^\r\n]*php\d*apache2_4\.dll[^\r\n]*",
                 $"LoadModule {moduleName} \"{moduleApachePath}\"");
 
             if (tsApachePath is not null)
             {
                 updated = Regex.Replace(
                     updated,
-                    @"(?im)^\s*LoadFile\s+[^\r\n]*php\d*ts\.dll[^\r\n]*$",
+                    @"(?im)^\s*LoadFile\s+[^\r\n]*php\d*ts\.dll[^\r\n]*",
                     $"LoadFile \"{tsApachePath}\"");
             }
 
