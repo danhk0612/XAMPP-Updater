@@ -42,7 +42,10 @@ public static partial class ApacheSslCompatibilityService
 
                 try
                 {
-                    using var certificate = X509Certificate2.CreateFromPemFile(certPath);
+                    // XAMPP normally stores certificate and private key in separate files.
+                    // CreateFromPemFile(certPath) may try to locate a private key in the same file,
+                    // so parse only the certificate PEM content here.
+                    using var certificate = X509Certificate2.CreateFromPem(File.ReadAllText(certPath));
                     using var rsa = certificate.GetRSAPublicKey();
                     if (rsa is null) continue;
 
