@@ -101,7 +101,7 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
             }
 
             PreserveDirectoryIfPresent(oldRoot, apacheRoot, "logs");
-            steps.Add("기존 Apache logs 보존 완료");
+            steps.Add("기존 Apache logs 복사 보존 완료 (롤백 원본 유지)");
 
             var httpd = Path.Combine(apacheRoot, "bin", "httpd.exe");
             var configTest = await RunAsync(httpd, new[] { "-t" }, apacheRoot, cancellationToken);
@@ -135,6 +135,14 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
         catch (Exception ex)
         {
             var rollbackErrors = new List<string>();
+
+            if (swapped)
+            {
+                var errorLogTail = TryReadApacheErrorLogTail(apacheRoot);
+                if (!string.IsNullOrWhiteSpace(errorLogTail))
+                    warnings.Add("새 Apache error.log 마지막 내용:\n" + errorLogTail);
+            }
+
             try
             {
                 if (serviceName is not null && string.Equals(_serviceController.GetState(serviceName), "RUNNING", StringComparison.OrdinalIgnoreCase))
@@ -170,6 +178,9 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
                 catch (Exception startEx)
                 {
                     rollbackErrors.Add("Apache 서비스 원상복구 실패: " + startEx.Message);
+                    var rollbackErrorLogTail = TryReadApacheErrorLogTail(apacheRoot);
+                    if (!string.IsNullOrWhiteSpace(rollbackErrorLogTail))
+                        rollbackErrors.Add("롤백된 Apache error.log 마지막 내용:\n" + rollbackErrorLogTail);
                 }
             }
 
@@ -289,7 +300,22 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
         if (!Directory.Exists(source)) return;
         var destination = Path.Combine(newRoot, name);
         if (Directory.Exists(destination)) Directory.Delete(destination, recursive: true);
-        Directory.Move(source, destination);
+        CopyDirectory(source, destination, overwrite: true);
+    }
+
+    private static string? TryReadApacheErrorLogTail(string apacheRoot)
+    {
+        try
+        {
+            var path = Path.Combine(apacheRoot, "logs", "error.log");
+            if (!File.Exists(path)) return null;
+            var lines = File.ReadLines(path).TakeLast(40).ToArray();
+            return lines.Length == 0 ? null : string.Join(Environment.NewLine, lines);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static void CopyDirectory(string source, string destination, bool overwrite)
