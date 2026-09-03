@@ -65,7 +65,8 @@ public sealed class ConfigHistoryWindow : Window
         AddButton(buttons, "메모 수정", (_, _) => EditSelectedNote());
         AddButton(buttons, "snapshot 폴더 열기", (_, _) => OpenSelectedFolder());
         AddButton(buttons, "snapshot 삭제", (_, _) => DeleteSelected());
-        AddButton(buttons, "선택 snapshot 복원", RestoreSelected_Click);
+        AddButton(buttons, "파일 선택 복원", SelectiveRestore_Click);
+        AddButton(buttons, "전체 snapshot 복원", RestoreSelected_Click);
         var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), Margin = new Thickness(0, 0, 0, 6), IsCancel = true };
         close.Click += (_, _) => Close();
         buttons.Children.Add(close);
@@ -194,28 +195,15 @@ public sealed class ConfigHistoryWindow : Window
         {
             var result = _snapshots.Verify(snapshot);
             totalFiles += result.VerifiedFiles;
-            if (result.Valid)
-            {
-                validCount++;
-                continue;
-            }
-
+            if (result.Valid) { validCount++; continue; }
             var name = $"{snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {snapshot.Stage}";
-            var errors = result.Errors.Take(4).Select(error => "  - " + error);
-            failed.Add(name + Environment.NewLine + string.Join(Environment.NewLine, errors));
+            failed.Add(name + Environment.NewLine + string.Join(Environment.NewLine, result.Errors.Take(4).Select(error => "  - " + error)));
         }
 
-        var summary =
-            $"선택 snapshot: {selected.Length:N0}개\n정상: {validCount:N0}개\n문제: {selected.Length - validCount:N0}개\n검증 성공 파일: {totalFiles:N0}개";
-        if (failed.Count > 0)
-            summary += "\n\n[문제 snapshot]\n" + string.Join("\n\n", failed.Take(8));
-
+        var summary = $"선택 snapshot: {selected.Length:N0}개\n정상: {validCount:N0}개\n문제: {selected.Length - validCount:N0}개\n검증 성공 파일: {totalFiles:N0}개";
+        if (failed.Count > 0) summary += "\n\n[문제 snapshot]\n" + string.Join("\n\n", failed.Take(8));
         _details.Text = summary.Replace("\n", "\r\n");
-        MessageBox.Show(this,
-            summary,
-            "snapshot 일괄 무결성 검사",
-            MessageBoxButton.OK,
-            failed.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+        MessageBox.Show(this, summary, "snapshot 일괄 무결성 검사", MessageBoxButton.OK, failed.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
     }
 
     private void EditSelectedNote()
@@ -237,16 +225,12 @@ public sealed class ConfigHistoryWindow : Window
     {
         var selected = MultiSelected("삭제");
         if (selected.Length == 0) return;
-
-        var preview = string.Join("\n", selected
-            .OrderByDescending(item => item.CapturedAt)
-            .Take(10)
+        var preview = string.Join("\n", selected.OrderByDescending(item => item.CapturedAt).Take(10)
             .Select(item => $"- {item.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {item.Stage} / {item.Version ?? "Unknown"}"));
         if (selected.Length > 10) preview += $"\n- 외 {selected.Length - 10:N0}개";
 
         var answer = MessageBox.Show(this,
-            $"선택한 snapshot {selected.Length:N0}개를 삭제합니다.\n" +
-            $"실제 {_type} 설정에는 영향을 주지 않지만 삭제한 이력은 복구할 수 없습니다.\n\n{preview}\n\n모두 삭제하시겠습니까?",
+            $"선택한 snapshot {selected.Length:N0}개를 삭제합니다.\n실제 {_type} 설정에는 영향을 주지 않지만 삭제한 이력은 복구할 수 없습니다.\n\n{preview}\n\n모두 삭제하시겠습니까?",
             "snapshot 일괄 삭제", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
@@ -254,27 +238,62 @@ public sealed class ConfigHistoryWindow : Window
         var failures = new List<string>();
         foreach (var snapshot in selected)
         {
-            try
-            {
-                _snapshots.Delete(snapshot);
-                deleted++;
-            }
-            catch (Exception ex)
-            {
-                failures.Add($"{snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}: {ex.Message}");
-            }
+            try { _snapshots.Delete(snapshot); deleted++; }
+            catch (Exception ex) { failures.Add($"{snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}: {ex.Message}"); }
         }
-
         ReloadSnapshots();
-        if (failures.Count == 0)
+        MessageBox.Show(this,
+            failures.Count == 0 ? $"snapshot {deleted:N0}개를 삭제했습니다." : $"삭제 완료: {deleted:N0}개\n삭제 실패: {failures.Count:N0}개\n\n{string.Join("\n", failures.Take(8))}",
+            "snapshot 삭제", MessageBoxButton.OK, failures.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private async void SelectiveRestore_Click(object sender, RoutedEventArgs e)
+    {
+        var snapshot = SingleSelected("파일 선택 복원");
+        if (snapshot is null) return;
+        if (!AdministratorPrivilege.EnsureElevated(this, _installation.RootPath, $"{_type} 파일 선택 복원")) return;
+
+        ConfigSnapshotManifest? current = null;
+        try
         {
-            MessageBox.Show(this, $"snapshot {deleted:N0}개를 삭제했습니다.", "snapshot 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        else
-        {
+            current = _snapshots.CaptureTemporary(_installation.RootPath, _type, CurrentVersion());
+            var diff = _compare.Compare(snapshot, current);
+            if (diff.Items.All(item => item.Kind == ConfigSnapshotDiffKind.Same))
+            {
+                MessageBox.Show(this, "선택한 snapshot과 현재 설정이 동일합니다.", "파일 선택 복원", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new SelectiveRestoreDialog(diff) { Owner = this };
+            if (dialog.ShowDialog() != true) return;
+            var paths = dialog.SelectedPaths;
+            var answer = MessageBox.Show(this,
+                $"선택한 설정 파일 {paths.Count:N0}개를 snapshot 상태로 복원합니다.\n\n" +
+                "현재 전체 설정은 적용 직전에 안전 snapshot으로 저장되며, 검증 실패 시 자동 원복합니다. 계속하시겠습니까?",
+                "파일 선택 복원", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            if (answer != MessageBoxResult.Yes) return;
+
+            IsEnabled = false;
+            var result = await _restore.RestoreSelectedAsync(_installation, snapshot, paths);
+            _details.Text = string.Join("\r\n", result.Steps) + (string.IsNullOrWhiteSpace(result.Error) ? string.Empty : "\r\n\r\n오류: " + result.Error);
+            ReloadSnapshots();
             MessageBox.Show(this,
-                $"삭제 완료: {deleted:N0}개\n삭제 실패: {failures.Count:N0}개\n\n{string.Join("\n", failures.Take(8))}",
-                "snapshot 일괄 삭제", MessageBoxButton.OK, MessageBoxImage.Warning);
+                result.Success
+                    ? $"선택한 설정 파일 {paths.Count:N0}개의 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}"
+                    : $"파일 선택 복원에 실패했습니다.\n\n{result.Error}\n\n" + (result.RolledBack ? "복원 직전 전체 설정으로 자동 원복했습니다." : "자동 원복도 완료되지 않았습니다."),
+                "파일 선택 복원", MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "파일 선택 복원", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+        finally
+        {
+            IsEnabled = true;
+            if (current is not null)
+            {
+                try { _snapshots.Delete(current); } catch { }
+            }
         }
     }
 
@@ -285,10 +304,10 @@ public sealed class ConfigHistoryWindow : Window
         if (!AdministratorPrivilege.EnsureElevated(this, _installation.RootPath, $"{_type} 설정 복원")) return;
 
         var answer = MessageBox.Show(this,
-            $"{_type} 설정을 선택한 snapshot 상태로 복원합니다.\n\nsnapshot: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
+            $"{_type} 설정을 선택한 snapshot 상태로 전체 복원합니다.\n\nsnapshot: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
             $"당시 버전: {snapshot.Version ?? "Unknown"}\n단계: {snapshot.Stage}\n메모: {snapshot.Note ?? "(없음)"}\n\n" +
             "현재 설정은 복원 직전에 별도 안전 snapshot으로 자동 저장합니다. 적용 후 검증하고 실패하면 직전 설정으로 자동 원복합니다. 계속하시겠습니까?",
-            "설정 snapshot 복원", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+            "전체 설정 snapshot 복원", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
         IsEnabled = false;
@@ -299,7 +318,7 @@ public sealed class ConfigHistoryWindow : Window
             ReloadSnapshots();
             MessageBox.Show(this,
                 result.Success
-                    ? $"{_type} 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}"
+                    ? $"{_type} 전체 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}"
                     : $"설정 복원에 실패했습니다.\n\n{result.Error}\n\n" + (result.RolledBack ? "복원 직전 설정으로 자동 원복했습니다." : "자동 원복도 완료되지 않았습니다. 로그와 현재 설정을 확인하세요."),
                 "설정 복원", MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
