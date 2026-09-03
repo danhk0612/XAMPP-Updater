@@ -14,7 +14,7 @@ public sealed class ConfigHistoryWindow : Window
     private readonly IConfigSnapshotService _snapshots;
     private readonly IConfigSnapshotCompareService _compare = new ConfigSnapshotCompareService();
     private readonly IConfigSnapshotRestoreService _restore = new ConfigSnapshotRestoreService();
-    private readonly ListBox _list = new() { SelectionMode = SelectionMode.Extended, MinWidth = 390 };
+    private readonly ListBox _list = new() { SelectionMode = SelectionMode.Extended, MinWidth = 410 };
     private readonly TextBox _details = new()
     {
         IsReadOnly = true,
@@ -32,14 +32,14 @@ public sealed class ConfigHistoryWindow : Window
         _snapshots = service ?? new ConfigSnapshotService();
 
         Title = $"{type} 설정 이력";
-        Width = 1020;
-        Height = 640;
-        MinWidth = 800;
-        MinHeight = 480;
+        Width = 1160;
+        Height = 680;
+        MinWidth = 900;
+        MinHeight = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var root = new Grid { Margin = new Thickness(12) };
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(390) });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(410) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -58,20 +58,16 @@ public sealed class ConfigHistoryWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0)
         };
-        var manual = new Button { Content = "현재 설정 snapshot 저장", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
-        manual.Click += ManualSnapshot_Click;
-        var open = new Button { Content = "선택 snapshot 폴더 열기", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
-        open.Click += (_, _) => OpenSelectedFolder();
-        var compare = new Button { Content = "선택한 2개 내용 비교", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
-        compare.Click += (_, _) => CompareSelected();
-        var restore = new Button { Content = "선택 snapshot 복원", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
-        restore.Click += RestoreSelected_Click;
+        AddButton(buttons, "현재 설정 snapshot 저장", ManualSnapshot_Click);
+        AddButton(buttons, "현재 설정과 비교", (_, _) => CompareWithCurrent());
+        AddButton(buttons, "선택한 2개 내용 비교", (_, _) => CompareSelected());
+        AddButton(buttons, "무결성 검사", (_, _) => VerifySelected());
+        AddButton(buttons, "메모 수정", (_, _) => EditSelectedNote());
+        AddButton(buttons, "snapshot 폴더 열기", (_, _) => OpenSelectedFolder());
+        AddButton(buttons, "snapshot 삭제", (_, _) => DeleteSelected());
+        AddButton(buttons, "선택 snapshot 복원", RestoreSelected_Click);
         var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), Margin = new Thickness(0, 0, 0, 6), IsCancel = true };
         close.Click += (_, _) => Close();
-        buttons.Children.Add(manual);
-        buttons.Children.Add(open);
-        buttons.Children.Add(compare);
-        buttons.Children.Add(restore);
         buttons.Children.Add(close);
         Grid.SetRow(buttons, 1);
         Grid.SetColumnSpan(buttons, 3);
@@ -81,43 +77,34 @@ public sealed class ConfigHistoryWindow : Window
         ReloadSnapshots();
     }
 
+    private static void AddButton(Panel panel, string text, RoutedEventHandler handler)
+    {
+        var button = new Button { Content = text, Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
+        button.Click += handler;
+        panel.Children.Add(button);
+    }
+
     private void ManualSnapshot_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new ManualSnapshotDialog(_type.ToString()) { Owner = this };
         if (dialog.ShowDialog() != true) return;
-
         try
         {
-            var version = _installation.Components.FirstOrDefault(item => item.Type == _type)?.Version;
-            var snapshot = _snapshots.Capture(_installation.RootPath, _type, version, "Manual", dialog.Note);
+            var snapshot = _snapshots.Capture(_installation.RootPath, _type, CurrentVersion(), "Manual", dialog.Note);
             ReloadSnapshots();
             SelectSnapshot(snapshot.ManifestPath);
-            MessageBox.Show(this,
-                $"현재 {_type} 설정 snapshot을 저장했습니다.\n\n{snapshot.ManifestPath}",
-                "설정 snapshot",
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            MessageBox.Show(this, $"현재 {_type} 설정 snapshot을 저장했습니다.\n\n{snapshot.ManifestPath}", "설정 snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "설정 snapshot", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "설정 snapshot", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private void ReloadSnapshots()
     {
         _list.Items.Clear();
-        foreach (var snapshot in _snapshots.List(_installation.RootPath, _type))
-            _list.Items.Add(new SnapshotItem(snapshot));
-
+        foreach (var snapshot in _snapshots.List(_installation.RootPath, _type)) _list.Items.Add(new SnapshotItem(snapshot));
         if (_list.Items.Count == 0)
-        {
             _details.Text = "저장된 설정 snapshot이 없습니다.\r\n\r\n'현재 설정 snapshot 저장'으로 기준점을 만들거나, 업데이트 실행 시 자동으로 전/후 snapshot이 저장됩니다.";
-        }
-        else
-        {
-            _list.SelectedIndex = 0;
-        }
+        else _list.SelectedIndex = 0;
     }
 
     private void SelectSnapshot(string manifestPath)
@@ -131,18 +118,21 @@ public sealed class ConfigHistoryWindow : Window
         }
     }
 
+    private ConfigSnapshotManifest? SingleSelected(string action)
+    {
+        if (_list.SelectedItems.Count == 1 && _list.SelectedItem is SnapshotItem selected) return selected.Manifest;
+        MessageBox.Show(this, $"{action}할 snapshot을 정확히 1개 선택하세요.", "설정 이력", MessageBoxButton.OK, MessageBoxImage.Information);
+        return null;
+    }
+
     private void ShowSelection()
     {
         if (_list.SelectedItems.Count != 1 || _list.SelectedItem is not SnapshotItem selected) return;
         var snapshot = selected.Manifest;
         _details.Text =
             $"캡처: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss.fff}\r\n" +
-            $"단계: {snapshot.Stage}\r\n" +
-            $"버전: {snapshot.Version ?? "Unknown"}\r\n" +
-            $"메모: {snapshot.Note ?? "(없음)"}\r\n" +
-            $"XAMPP: {snapshot.XamppRoot}\r\n" +
-            $"manifest: {snapshot.ManifestPath}\r\n" +
-            $"설정 파일: {snapshot.Files.Count}개\r\n\r\n" +
+            $"단계: {snapshot.Stage}\r\n버전: {snapshot.Version ?? "Unknown"}\r\n메모: {snapshot.Note ?? "(없음)"}\r\n" +
+            $"XAMPP: {snapshot.XamppRoot}\r\nmanifest: {snapshot.ManifestPath}\r\n설정 파일: {snapshot.Files.Count}개\r\n\r\n" +
             string.Join("\r\n", snapshot.Files.OrderBy(item => item.RelativePath, StringComparer.OrdinalIgnoreCase)
                 .Select(item => $"{item.RelativePath}  {item.Size:N0} bytes  {item.Sha256}"));
     }
@@ -155,87 +145,115 @@ public sealed class ConfigHistoryWindow : Window
             MessageBox.Show(this, "비교할 snapshot을 정확히 2개 선택하세요.", "설정 이력 비교", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
+        try { new ConfigSnapshotContentDiffWindow(_compare.Compare(selected[0], selected[1])) { Owner = this }.ShowDialog(); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "설정 이력 비교", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
 
+    private void CompareWithCurrent()
+    {
+        var selected = SingleSelected("현재 설정과 비교");
+        if (selected is null) return;
+        ConfigSnapshotManifest? current = null;
         try
         {
-            var diff = _compare.Compare(selected[0], selected[1]);
-            new ConfigSnapshotContentDiffWindow(diff) { Owner = this }.ShowDialog();
+            current = _snapshots.CaptureTemporary(_installation.RootPath, _type, CurrentVersion());
+            new ConfigSnapshotContentDiffWindow(_compare.Compare(selected, current)) { Owner = this }.ShowDialog();
         }
-        catch (Exception ex)
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "현재 설정과 비교", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally
         {
-            MessageBox.Show(this, ex.Message, "설정 이력 비교", MessageBoxButton.OK, MessageBoxImage.Error);
+            if (current is not null)
+            {
+                try { _snapshots.Delete(current); } catch { }
+            }
         }
+    }
+
+    private void VerifySelected()
+    {
+        var selected = SingleSelected("검사");
+        if (selected is null) return;
+        var result = _snapshots.Verify(selected);
+        MessageBox.Show(this,
+            result.Valid
+                ? $"snapshot 무결성이 정상입니다.\n\n검증 파일: {result.VerifiedFiles:N0}개"
+                : $"snapshot 무결성 검사에서 문제가 발견되었습니다.\n\n검증 성공: {result.VerifiedFiles:N0}개\n\n{string.Join("\n", result.Errors.Take(12))}",
+            "snapshot 무결성",
+            MessageBoxButton.OK,
+            result.Valid ? MessageBoxImage.Information : MessageBoxImage.Warning);
+    }
+
+    private void EditSelectedNote()
+    {
+        var selected = SingleSelected("메모 수정");
+        if (selected is null) return;
+        var dialog = new ManualSnapshotDialog(_type.ToString(), selected.Note, editMode: true) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+        try
+        {
+            var updated = _snapshots.UpdateNote(selected, dialog.Note);
+            ReloadSnapshots();
+            SelectSnapshot(updated.ManifestPath);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "메모 수정", MessageBoxButton.OK, MessageBoxImage.Error); }
+    }
+
+    private void DeleteSelected()
+    {
+        var selected = SingleSelected("삭제");
+        if (selected is null) return;
+        var answer = MessageBox.Show(this,
+            $"이 snapshot을 삭제합니다. 이 작업은 실제 {_type} 설정에는 영향을 주지 않지만 삭제한 이력은 복구할 수 없습니다.\n\n" +
+            $"{selected.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {selected.Stage} / {selected.Version}\n메모: {selected.Note ?? "(없음)"}\n\n삭제하시겠습니까?",
+            "snapshot 삭제", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (answer != MessageBoxResult.Yes) return;
+        try
+        {
+            _snapshots.Delete(selected);
+            ReloadSnapshots();
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "snapshot 삭제", MessageBoxButton.OK, MessageBoxImage.Error); }
     }
 
     private async void RestoreSelected_Click(object sender, RoutedEventArgs e)
     {
-        if (_list.SelectedItems.Count != 1 || _list.SelectedItem is not SnapshotItem selected)
-        {
-            MessageBox.Show(this, "복원할 snapshot을 정확히 1개 선택하세요.", "설정 복원", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
+        var snapshot = SingleSelected("복원");
+        if (snapshot is null) return;
         if (!AdministratorPrivilege.EnsureElevated(this, _installation.RootPath, $"{_type} 설정 복원")) return;
 
-        var snapshot = selected.Manifest;
-        var answer = MessageBox.Show(
-            this,
-            $"{_type} 설정을 선택한 snapshot 상태로 복원합니다.\n\n" +
-            $"snapshot: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
-            $"당시 버전: {snapshot.Version ?? "Unknown"}\n" +
-            $"단계: {snapshot.Stage}\n" +
-            $"메모: {snapshot.Note ?? "(없음)"}\n\n" +
-            "현재 설정은 복원 직전에 별도 안전 snapshot으로 자동 저장합니다. " +
-            "적용 후 구성요소별 검증을 수행하고 실패하면 직전 설정으로 자동 원복합니다. 계속하시겠습니까?",
-            "설정 snapshot 복원",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Warning,
-            MessageBoxResult.No);
+        var answer = MessageBox.Show(this,
+            $"{_type} 설정을 선택한 snapshot 상태로 복원합니다.\n\nsnapshot: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
+            $"당시 버전: {snapshot.Version ?? "Unknown"}\n단계: {snapshot.Stage}\n메모: {snapshot.Note ?? "(없음)"}\n\n" +
+            "현재 설정은 복원 직전에 별도 안전 snapshot으로 자동 저장합니다. 적용 후 검증하고 실패하면 직전 설정으로 자동 원복합니다. 계속하시겠습니까?",
+            "설정 snapshot 복원", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer != MessageBoxResult.Yes) return;
 
         IsEnabled = false;
         try
         {
             var result = await _restore.RestoreAsync(_installation, snapshot);
-            _details.Text = string.Join("\r\n", result.Steps) +
-                            (string.IsNullOrWhiteSpace(result.Error) ? string.Empty : "\r\n\r\n오류: " + result.Error);
+            _details.Text = string.Join("\r\n", result.Steps) + (string.IsNullOrWhiteSpace(result.Error) ? string.Empty : "\r\n\r\n오류: " + result.Error);
             ReloadSnapshots();
-
-            if (result.Success)
-            {
-                MessageBox.Show(this,
-                    $"{_type} 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}",
-                    "설정 복원",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information);
-            }
-            else
-            {
-                MessageBox.Show(this,
-                    $"설정 복원에 실패했습니다.\n\n{result.Error}\n\n" +
-                    (result.RolledBack ? "복원 직전 설정으로 자동 원복했습니다." : "자동 원복도 완료되지 않았습니다. 로그와 현재 설정을 확인하세요."),
-                    "설정 복원",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
+            MessageBox.Show(this,
+                result.Success
+                    ? $"{_type} 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}"
+                    : $"설정 복원에 실패했습니다.\n\n{result.Error}\n\n" + (result.RolledBack ? "복원 직전 설정으로 자동 원복했습니다." : "자동 원복도 완료되지 않았습니다. 로그와 현재 설정을 확인하세요."),
+                "설정 복원", MessageBoxButton.OK, result.Success ? MessageBoxImage.Information : MessageBoxImage.Error);
         }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "설정 복원", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            IsEnabled = true;
-        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "설정 복원", MessageBoxButton.OK, MessageBoxImage.Error); }
+        finally { IsEnabled = true; }
     }
 
     private void OpenSelectedFolder()
     {
-        if (_list.SelectedItem is not SnapshotItem selected) return;
-        var folder = Path.GetDirectoryName(selected.Manifest.ManifestPath);
+        var selected = SingleSelected("폴더 열기");
+        if (selected is null) return;
+        var folder = Path.GetDirectoryName(selected.ManifestPath);
         if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return;
         Process.Start(new ProcessStartInfo { FileName = folder, UseShellExecute = true });
     }
+
+    private string? CurrentVersion() => _installation.Components.FirstOrDefault(item => item.Type == _type)?.Version;
 
     private sealed class SnapshotItem
     {
