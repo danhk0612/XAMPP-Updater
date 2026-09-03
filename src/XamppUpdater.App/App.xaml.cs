@@ -11,7 +11,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, async () =>
         {
             if (MainWindow is not Window window) return;
 
@@ -19,12 +19,16 @@ public partial class App : Application
             {
                 var assemblyPath = Assembly.GetExecutingAssembly().Location;
                 var buildTime = File.GetLastWriteTime(assemblyPath);
-                window.Title = $"XAMPP Updater - Build {buildTime:yyyy-MM-dd HH:mm:ss}";
+                var privilege = AdministratorPrivilege.IsElevated ? "Admin" : "Standard";
+                window.Title = $"XAMPP Updater - Build {buildTime:yyyy-MM-dd HH:mm:ss} [{privilege}]";
             }
             catch
             {
                 window.Title = "XAMPP Updater - Build unknown";
             }
+
+            if (window is MainWindow mainWindow)
+                await mainWindow.InspectStartupRootAsync();
         });
     }
 }
