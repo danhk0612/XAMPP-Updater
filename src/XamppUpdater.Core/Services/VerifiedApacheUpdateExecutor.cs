@@ -9,7 +9,7 @@ public sealed class VerifiedApacheUpdateExecutor : IApacheUpdateExecutor
 
     public VerifiedApacheUpdateExecutor(IApacheUpdateExecutor? inner = null, IConfigSnapshotService? snapshots = null)
     {
-        _inner = inner ?? new ApacheUpdateExecutor();
+        _inner = inner ?? new ApacheCompatibilityPreparedUpdateExecutor();
         _snapshots = snapshots ?? new ConfigSnapshotService();
     }
 
