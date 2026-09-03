@@ -32,6 +32,7 @@ public partial class App : Application
                 mainWindow.InitializeConfigHistoryUi();
                 await mainWindow.InspectStartupRootAsync();
                 await mainWindow.InitializeReleaseLifecycleAsync();
+                await mainWindow.ResumeStartupUpdateAsync();
             }
         });
     }
