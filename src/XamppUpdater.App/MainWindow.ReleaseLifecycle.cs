@@ -1,5 +1,4 @@
 using System.ComponentModel;
-using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using XamppUpdater.Core.Models;
@@ -12,9 +11,8 @@ public partial class MainWindow
     private DispatcherTimer? _pathChangeTimer;
     private string? _lastAutoInspectedPath;
 
-    protected override void OnContentRendered(EventArgs e)
+    internal async Task InitializeReleaseLifecycleAsync()
     {
-        base.OnContentRendered(e);
         if (_releaseLifecycleInitialized) return;
         _releaseLifecycleInitialized = true;
 
@@ -26,7 +24,7 @@ public partial class MainWindow
         var descriptor = DependencyPropertyDescriptor.FromProperty(ComboBox.TextProperty, typeof(ComboBox));
         descriptor?.AddValueChanged(InstallPathComboBox, (_, _) => SchedulePathInspection());
 
-        _ = CompleteInitialDetectionAsync();
+        await CompleteInitialDetectionAsync();
     }
 
     private void SchedulePathInspection()
