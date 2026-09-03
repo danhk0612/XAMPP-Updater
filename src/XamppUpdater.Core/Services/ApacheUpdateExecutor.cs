@@ -316,6 +316,14 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
             CreateNoWindow = true,
             WorkingDirectory = workingDirectory
         };
+        var binDirectory = Path.GetDirectoryName(executable);
+        if (!string.IsNullOrWhiteSpace(binDirectory))
+        {
+            var currentPath = start.Environment["PATH"] ?? Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+            start.Environment["PATH"] = string.IsNullOrWhiteSpace(currentPath)
+                ? binDirectory
+                : binDirectory + Path.PathSeparator + currentPath;
+        }
         foreach (var argument in arguments) start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
         process.Start();
