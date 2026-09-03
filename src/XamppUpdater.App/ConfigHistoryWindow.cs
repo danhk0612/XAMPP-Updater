@@ -41,7 +41,6 @@ public sealed class ConfigHistoryWindow : Window
     {
     }
 
-    // 기존 호출부 호환. 창은 항상 통합형이며 전달된 구성요소는 초기 필터로만 사용한다.
     public ConfigHistoryWindow(XamppInstallation installation, XamppComponentType type, IConfigSnapshotService? service = null)
         : this(installation, (XamppComponentType?)type, service)
     {
@@ -113,24 +112,24 @@ public sealed class ConfigHistoryWindow : Window
         footer.Children.Add(primary);
 
         var secondary = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-        var advanced = new Expander { Header = "고급 복원", Margin = new Thickness(0, 0, 8, 0) };
-        var advancedPanel = new StackPanel { Margin = new Thickness(8, 5, 0, 0) };
-        AddButton(advancedPanel, "파일 선택 복원", SelectiveRestore_Click);
-        AddButton(advancedPanel, "설정 항목 병합", EntryMerge_Click);
-        advanced.Content = advancedPanel;
-        secondary.Children.Add(advanced);
+        var moreButton = new Button
+        {
+            Content = "더보기 ▼",
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 8, 0),
+            ToolTip = "고급 복원, 비교, 무결성 검사 등 자주 사용하지 않는 작업을 엽니다."
+        };
+        var moreMenu = BuildMoreMenu();
+        moreButton.ContextMenu = moreMenu;
+        moreButton.Click += (_, _) =>
+        {
+            moreMenu.PlacementTarget = moreButton;
+            moreMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+            moreMenu.IsOpen = true;
+        };
+        secondary.Children.Add(moreButton);
 
-        var more = new Expander { Header = "기타 작업", Margin = new Thickness(0, 0, 8, 0) };
-        var morePanel = new StackPanel { Margin = new Thickness(8, 5, 0, 0) };
-        AddButton(morePanel, "과거 snapshot 2개 비교", (_, _) => CompareSelected());
-        AddButton(morePanel, "무결성 검사", (_, _) => VerifySelected());
-        AddButton(morePanel, "메모 수정", (_, _) => EditSelectedNote());
-        AddButton(morePanel, "snapshot 폴더 열기", (_, _) => OpenSelectedFolder());
-        AddButton(morePanel, "현재 설정 snapshot 저장", ManualSnapshot_Click);
-        more.Content = morePanel;
-        secondary.Children.Add(more);
-
-        var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), IsCancel = true, VerticalAlignment = VerticalAlignment.Top };
+        var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), IsCancel = true };
         close.Click += (_, _) => Close();
         secondary.Children.Add(close);
         Grid.SetColumn(secondary, 1);
@@ -144,6 +143,45 @@ public sealed class ConfigHistoryWindow : Window
         _filter.SelectedItem = initialFilter is null ? "전체" : initialFilter.Value;
         _filter.SelectionChanged += (_, _) => ReloadSnapshots();
         ReloadSnapshots();
+    }
+
+    private ContextMenu BuildMoreMenu()
+    {
+        var menu = new ContextMenu();
+        var selectiveRestore = AddMenuItem(menu, "파일 선택 복원", SelectiveRestore_Click);
+        var entryMerge = AddMenuItem(menu, "설정 항목 병합", EntryMerge_Click);
+        menu.Items.Add(new Separator());
+        var compareTwo = AddMenuItem(menu, "선택한 2개 snapshot 비교", (_, _) => CompareSelected());
+        var verify = AddMenuItem(menu, "무결성 검사", (_, _) => VerifySelected());
+        var editNote = AddMenuItem(menu, "메모 수정", (_, _) => EditSelectedNote());
+        var openFolder = AddMenuItem(menu, "snapshot 폴더 열기", (_, _) => OpenSelectedFolder());
+        menu.Items.Add(new Separator());
+        var manual = AddMenuItem(menu, "현재 설정 snapshot 저장", ManualSnapshot_Click);
+
+        menu.Opened += (_, _) =>
+        {
+            var count = _list.SelectedItems.Count;
+            var selected = _list.SelectedItems.Cast<SnapshotItem>().Select(item => item.Manifest).ToArray();
+            var one = count == 1;
+            var sameTypeTwo = count == 2 && selected.Select(item => item.Type).Distinct().Count() == 1;
+
+            selectiveRestore.IsEnabled = one;
+            entryMerge.IsEnabled = one;
+            compareTwo.IsEnabled = sameTypeTwo;
+            verify.IsEnabled = count >= 1;
+            editNote.IsEnabled = one;
+            openFolder.IsEnabled = one;
+            manual.IsEnabled = SelectedFilterType() is not null;
+        };
+        return menu;
+    }
+
+    private static MenuItem AddMenuItem(ItemsControl menu, string text, RoutedEventHandler handler)
+    {
+        var item = new MenuItem { Header = text };
+        item.Click += handler;
+        menu.Items.Add(item);
+        return item;
     }
 
     private void BuildColumns()
@@ -223,7 +261,7 @@ public sealed class ConfigHistoryWindow : Window
         {
             var groups = _list.SelectedItems.Cast<SnapshotItem>().GroupBy(item => item.Manifest.Type)
                 .Select(group => $"{group.Key} {group.Count():N0}개");
-            _details.Text = $"snapshot {_list.SelectedItems.Count:N0}개 선택됨\r\n{string.Join(" / ", groups)}\r\n\r\n다중 선택은 삭제와 무결성 검사에 사용할 수 있습니다. 과거 snapshot 비교는 같은 구성요소 2개를 선택해야 합니다.";
+            _details.Text = $"snapshot {_list.SelectedItems.Count:N0}개 선택됨\r\n{string.Join(" / ", groups)}\r\n\r\n다중 선택은 삭제와 무결성 검사에 사용할 수 있습니다. snapshot 비교는 같은 구성요소 2개를 선택해야 합니다.";
             return;
         }
         if (_list.SelectedItems.Count != 1 || _list.SelectedItem is not SnapshotItem selected) return;
