@@ -180,26 +180,45 @@ public partial class MainWindow
             $"{type} 프로그램 롤백", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (confirm != MessageBoxResult.Yes) return;
 
+        var runLog = new List<string>();
+        void Log(string text)
+        {
+            var line = $"[{DateTime.Now:HH:mm:ss}] {text}";
+            runLog.Add(line);
+            AppendVisibleLog(type, line);
+        }
+        void Progress(int percent, string message)
+        {
+            UpdateProgressBar.Value = Math.Clamp(percent, 0, 100);
+            ProgressPercentText.Text = $"{Math.Clamp(percent, 0, 100)}%";
+            StatusText.Text = message;
+            Log("진행: " + message + $" ({Math.Clamp(percent, 0, 100)}%)");
+        }
+
         ShowComponent(type);
-        UpdateUiProgress(type, 5, $"{type} 롤백 백업 검증 완료");
+        Progress(5, $"{type} 롤백 백업 검증 완료");
+        Log($"수동 롤백 시작: {type} {current} → {rollback.Manifest.CurrentVersion}");
+        Log("XAMPP 경로: " + installation.RootPath);
+        Log("롤백 manifest: " + rollback.ManifestPath);
+        var success = false;
         try
         {
             _primaryWorkflowRunning = true;
             RefreshPrimaryUpdateButtons();
             RefreshRollbackUi();
 
-            UpdateUiProgress(type, 15, "롤백 직전 현재 상태 안전 백업 중...");
+            Progress(15, "롤백 직전 현재 상태 안전 백업 중...");
             var safety = await CreateSafetyBackupBeforeRollbackAsync(installation, type, rollback.Manifest.CurrentVersion);
             BackupIntegrityVerifier.Verify(safety, requireLogicalBackup: false);
-            AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ 롤백 직전 안전 백업 완료: {safety.ManifestPath}");
+            Log("롤백 직전 안전 백업 완료: " + safety.ManifestPath);
 
-            UpdateUiProgress(type, 35, $"{type} {current} → {rollback.Manifest.CurrentVersion} 롤백 중...");
+            Progress(35, $"{type} {current} → {rollback.Manifest.CurrentVersion} 롤백 중...");
             var result = await _componentRollbackService.RollbackAsync(installation, rollback);
-            foreach (var step in result.Steps) AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] • {step}");
+            foreach (var step in result.Steps) Log("실행: " + step);
             if (!result.Success)
                 throw new InvalidOperationException(result.Error ?? "프로그램 롤백에 실패했습니다.");
 
-            UpdateUiProgress(type, 90, "롤백 완료. 설치 상태와 온라인 버전을 다시 확인하는 중...");
+            Progress(90, "롤백 완료. 설치 상태와 온라인 버전을 다시 확인하는 중...");
             await InspectAsync(installation.RootPath, "PostRollback");
             _nextCatalogRefreshAttempt = DateTimeOffset.MinValue;
             await CheckOnlineVersionsAsync();
@@ -207,20 +226,36 @@ public partial class MainWindow
             ApplyCurrentVersionOnlyDisplay();
             RefreshPrimaryUpdateButtons();
             RefreshRollbackUi();
-            UpdateUiProgress(type, 100, $"{type} {rollback.Manifest.CurrentVersion} 롤백 완료");
+            success = true;
+            Progress(100, $"{type} {rollback.Manifest.CurrentVersion} 롤백 완료");
+            Log($"수동 롤백 완료: {type} {current} → {rollback.Manifest.CurrentVersion}");
             MessageBox.Show(this, $"{type} 프로그램 롤백이 완료되었습니다.\n\n{current} → {rollback.Manifest.CurrentVersion}", $"{type} 롤백", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (OperationCanceledException ex)
         {
-            UpdateUiProgress(type, 0, "롤백 취소: " + ex.Message);
+            Progress(0, "롤백 취소: " + ex.Message);
+            Log("수동 롤백 취소: " + ex.Message);
         }
         catch (Exception ex)
         {
-            UpdateUiProgress(type, 0, "롤백 실패: " + ex.Message);
+            Progress(0, "롤백 실패: " + ex.Message);
+            Log("수동 롤백 실패: " + ex.Message);
             MessageBox.Show(this, ex.Message, $"{type} 롤백", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         finally
         {
+            Log($"수동 롤백 실행 종료: {(success ? "성공" : "실패/중단")}");
+            try
+            {
+                var component = type == XamppComponentType.MariaDb ? "MariaDB" : type.ToString();
+                var path = _executionLogService.Save(component, runLog);
+                AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ✓ 롤백 로그 파일 저장: {path}");
+            }
+            catch (Exception logEx)
+            {
+                AppendVisibleLog(type, $"[{DateTime.Now:HH:mm:ss}] ! 롤백 로그 저장 실패: {logEx.Message}");
+            }
+
             MariaDbCredentialsDialog.ClearCachedCredentials();
             _primaryWorkflowRunning = false;
             RefreshPrimaryUpdateButtons();
