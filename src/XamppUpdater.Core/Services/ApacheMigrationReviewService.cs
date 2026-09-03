@@ -192,14 +192,19 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     {
         var original = File.ReadAllText(mainConf);
         var apachePath = stagedRoot.Replace('\\', '/');
+
+        // XAMPP Apache configurations can contain both directives independently.
+        // Rewriting only Define SRVROOT can leave a literal ServerRoot pointing at the live Apache,
+        // causing the new httpd.exe to load old modules during the staging validation.
         var updated = DefineSrvRootRegex().Replace(original, $"Define SRVROOT \"{apachePath}\"");
-        if (string.Equals(original, updated, StringComparison.Ordinal))
-            updated = ServerRootRegex().Replace(original, $"ServerRoot \"{apachePath}\"");
+        updated = ServerRootRegex().Replace(updated, $"ServerRoot \"{apachePath}\"");
+
         if (!string.Equals(original, updated, StringComparison.Ordinal))
         {
             File.WriteAllText(mainConf, updated);
-            items.Add(new ApacheMigrationReviewItem(ApacheMigrationReviewKind.AutomaticChange,
-                "검토용 ServerRoot만 임시 Apache 경로로 변경하여 사전 검증"));
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.AutomaticChange,
+                "검토용 Define SRVROOT/ServerRoot를 임시 Apache 경로로 변경하여 사전 검증"));
         }
     }
 
@@ -357,7 +362,15 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
     private static async Task<ProcessResult> RunAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
     {
         if (!File.Exists(executable)) throw new FileNotFoundException("httpd.exe를 찾을 수 없습니다.", executable);
-        var start = new ProcessStartInfo { FileName = executable, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true, WorkingDirectory = workingDirectory };
+        var start = new ProcessStartInfo
+        {
+            FileName = executable,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory
+        };
         var binDirectory = Path.GetDirectoryName(executable);
         if (!string.IsNullOrWhiteSpace(binDirectory))
         {
@@ -383,16 +396,24 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         return fullPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void TryDeleteDirectory(string path) { if (Directory.Exists(path)) try { Directory.Delete(path, recursive: true); } catch { } }
+    private static void TryDeleteDirectory(string path)
+    {
+        if (!Directory.Exists(path)) return;
+        try { Directory.Delete(path, recursive: true); } catch { }
+    }
+
     private static string Compact(string value) => value.Replace("\r", " ").Replace("\n", " ").Trim();
     private sealed record ProcessResult(int ExitCode, string Output);
 
     [GeneratedRegex(@"(?im)^\s*Define\s+SRVROOT\s+[^\r\n]+$")]
     private static partial Regex DefineSrvRootRegex();
+
     [GeneratedRegex(@"(?im)^\s*ServerRoot\s+[^\r\n]+$")]
     private static partial Regex ServerRootRegex();
+
     [GeneratedRegex(@"^\s*LoadModule\s+\S+\s+(?<path>[^#]+?)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex LoadModuleRegex();
+
     [GeneratedRegex(@"Cannot load\s+(?<path>[^\s]+)\s+into server", RegexOptions.IgnoreCase)]
     private static partial Regex CannotLoadModuleRegex();
 }
