@@ -5,15 +5,16 @@
 Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB만** 안전하게 관리한다.
 
 - 설치 위치: 자동 감지 + 직접 지정
-- Windows 서비스명: 실제 시스템에서 감지하고, 이후 설정에서 직접 지정 가능하게 확장
+- Windows 서비스명: 실제 시스템에서 감지
 - 현재 버전 확인
 - 최신 버전 또는 사용자가 선택한 버전으로 업데이트
 - 업데이트 전 설정/데이터 백업
 - 기존 설정과 새 기본 설정 비교
 - 필요한 설정 복원 또는 선택적 병합
-- 완전 자동화가 어려운 경우에도 비교/선택/확인 단계를 포함한 보조 업데이트 제공
+- 완전 자동화가 어려운 경우 비교/선택/확인 단계를 포함한 보조 업데이트
+- 별도로 설치된 MariaDB는 관리하지 않고 선택한 XAMPP 루트 내부 MariaDB만 관리
 
-XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리는 범위 밖이다.
+XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 등) 관리는 범위 밖이다.
 
 ## Phase 1 — Foundation & Local Detection
 
@@ -21,110 +22,140 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat 등) 관리�
 
 - [x] .NET 8 WPF GUI 프로젝트 골격
 - [x] Core와 GUI 분리
-- [x] `C:\xampp` 및 각 고정 드라이브의 `\xampp` 기본 경로 감지
-- [x] XAMPP 제거 정보 레지스트리 기반 설치 경로 감지
-- [x] Apache/MariaDB Windows 서비스 `ImagePath` 기반 설치 경로 감지
-- [x] 설치 경로 직접 입력/폴더 선택
+- [x] XAMPP 경로 자동 감지 + 직접 지정
 - [x] Apache / PHP / MariaDB 현재 버전 확인
-- [x] Apache/MariaDB 실제 서비스명 표시
+- [x] Apache/MariaDB Windows 서비스명 및 ImagePath 감지
 - [x] 실제 Windows 11 + XAMPP 환경 검증
 
 ## Phase 2 — Version Catalog & Compatibility
 
 완료.
 
-- [x] Apache / PHP / MariaDB upstream 최신 버전 조회
+- [x] Apache / PHP / MariaDB upstream 버전 조회
 - [x] Apache Friends XAMPP 공식 번들 기준 버전 조회
-- [x] PE 아키텍처(x86/x64/ARM64) 감지
-- [x] PHP Thread Safe / compiler / Extension Build / PHP API 감지
-- [x] Apache의 실제 PHP `LoadModule` 연동 방식 감지
-- [x] MariaDB 현재 major.minor 계열 감지
-- [x] 현재 환경에 맞는 패치 후보 탐색
-- [x] 후보 상태를 `자동 가능 / 보조 업데이트 / 검토 후 진행 / 후보 없음`으로 모델링
-- [x] 최신 버전 및 각 major.minor 계열의 최신 패치 1개를 목표 버전으로 선택 가능
-- [x] 현재 버전 → 선택 버전 업데이트 경로 계산
-- [x] PHP 메이저/마이너 변경의 php.ini/확장/Apache SAPI 마이그레이션 계획
-- [x] MariaDB 계열 변경의 단계적 업그레이드 계획
-- [x] 계열별 최신 버전 필터 smoke test
-
-패키지 다운로드 시점의 SHA256/PGP, 압축 내부 구조, ABI 세부 검증은 Phase 3의 실제 업데이트 준비 과정에서 수행한다.
+- [x] PE 아키텍처 감지
+- [x] PHP TS/NTS/compiler/API 정보 감지
+- [x] Apache PHP LoadModule 연동 방식 감지
+- [x] 최신 버전 및 각 major.minor 계열 최신 패치 선택
+- [x] major/minor 변경을 포함한 업데이트 대상 선택
+- [x] PHP 설정/확장/SAPI 마이그레이션 계획
+- [x] MariaDB major 업그레이드 경로 모델링
 
 ## Phase 3 — Backup, Compare & Preflight
 
-진행 중.
+핵심 기능 완료. 일부 추가 검증은 하드닝 항목으로 유지한다.
 
 ### 3A — 현재 설치 Preflight
 
-- [x] 구성요소별 `업데이트 준비 점검` UI
-- [x] 현재 프로세스 실행 여부 확인
-- [x] 등록 서비스 상태 확인
-- [x] 구성요소 전체 백업 예상 파일 수/용량 산출
-- [x] Apache `.conf`, PHP `.ini*`, MariaDB `my.ini/my.cnf` 설정 파일 manifest 생성
-- [x] 설정 파일 SHA256 기록
-- [x] 기본 백업 저장 위치 산출
-- [x] MariaDB data 디렉터리 보호/논리 백업 필요성 표시
-- [x] Preflight smoke test
+- [x] 구성요소별 업데이트 준비 점검
+- [x] 프로세스/서비스 상태 확인
+- [x] 백업 예상 파일 수/용량
+- [x] 설정 파일 manifest + SHA256
+- [x] 백업 저장 위치 산출
+- [x] MariaDB data/논리 백업 필요성 표시
 
 ### 3B — 실제 백업과 롤백 manifest
 
-- [x] 업데이트 직전 서비스/프로세스 상태 스냅샷 저장
-- [x] Apache/PHP 구성요소 폴더 자동 백업
-- [x] MariaDB 설정 + data 물리 백업 엔진
-- [x] MariaDB `mariadb-dump/mysqldump` 전체 논리 백업
-- [x] MariaDB 자동 무인증/root 무암호 시도 후 인증 실패 시 사용자 계정/암호 요청
-- [x] MariaDB 서비스 중지 → 물리 백업 → 원래 RUNNING 상태 복구 흐름
-- [x] 백업 manifest(JSON) 저장
-- [x] 논리 백업 SQL의 크기/SHA256을 manifest에 기록
-- [x] 파일별 크기/SHA256/원본 경로 기록
-- [x] 롤백에 필요한 서비스 상태와 대상 버전 기록
-- [x] 백업/패키지/비교 작업 중 UI 동시 입력 방지
-
-> Windows 서비스 중지/시작에 필요한 권한이 없는 경우에는 논리 백업까지 생성한 뒤 물리 백업 단계에서 관리자 권한 필요 오류를 표시한다. 앱 전체 권한 상승 정책은 Phase 4 실행 엔진에서 확정한다.
+- [x] 서비스/프로세스 상태 스냅샷
+- [x] Apache/PHP 폴더 백업
+- [x] MariaDB 전체 논리 백업
+- [x] MariaDB 서비스 중지 후 물리 백업
+- [x] MariaDB 인증정보는 메모리/임시 option 파일에만 사용
+- [x] 파일별 크기/SHA256 manifest
+- [x] 실제 업데이트 직전 백업 무결성 재검증
+- [x] Apache/PHP/MariaDB 모두 파괴적 교체 전에 백업 무결성 확인
 
 ### 3C — 패키지 준비와 비교
 
-- [x] 선택 버전 실제 패키지 URL 확정 및 다운로드 가능한 공급원 연결
-- [x] MariaDB 공식 `sha256sums.txt` 자동 검증
-- [x] 다운로드 패키지 로컬 SHA256 기록
-- [x] ZIP 내부 PE 아키텍처/필수 실행 파일/모듈 구조 검사
-- [x] 기존 설치와 신규 패키지 파일 인벤토리 비교
-- [x] 기존 설정과 신규 기본 설정 diff 생성
-- [ ] PGP가 제공되는 패키지 서명 신뢰 검증
-- [ ] 자동 병합 가능 / 사용자 확인 필요 / 폐기 후보 상세 분류
-- [ ] Apache 외부 모듈 및 PHP extension ABI/런타임 상세 판정
-- [ ] MariaDB 목표 버전별 중간 업그레이드 경로를 실제 패키지 단계로 확정
-
-### Phase 3 완료 조건
-
-1. 실제 업데이트 전에 서비스/프로세스/파일 상태를 재현 가능한 manifest로 저장한다.
-2. 구성요소별 복구 가능한 백업을 생성한다.
-3. 대상 패키지를 다운로드하고 가능한 검증 수단을 자동 적용한다.
-4. 기존 설정과 신규 패키지 차이를 사용자에게 적용 전에 보여준다.
-5. 실제 교체를 시작하기 전에 롤백 가능한 상태임을 확인한다.
+- [x] 선택 버전 실제 패키지 URL 해석 및 다운로드
+- [x] MariaDB 공식 SHA256 검증
+- [x] 다운로드 패키지 SHA256 기록
+- [x] ZIP 내부 PE 아키텍처/필수 실행 파일 검사
+- [x] 기존/신규 파일 인벤토리 비교
+- [x] 기존 설정/신규 기본 설정 diff
+- [x] 다운로드 패키지 캐시 재사용
+- [ ] 제공되는 경우 PGP 서명 신뢰 검증
+- [ ] 외부 Apache 모듈 ABI 판정 강화
+- [ ] PECL 외부 PHP extension의 의존 DLL 판정 강화
 
 ## Phase 4 — Assisted Update Engine
 
-- 업데이트 단계별 실행 계획 화면
-- Apache 서비스 중지 → 백업 → 패키지 교체 → 설정/모듈 복원 → 구성 검사 → 재시작
-- PHP 백업 → 패키지 교체 → php.ini/확장 설정 비교 및 선택 병합 → Apache SAPI 재검증
-- MariaDB 논리 백업 → 서비스 중지 → 전체 data/설정 물리 백업 → 바이너리 교체 → `mariadb-upgrade` → 상태 검증 → 재시작
-- Windows 서비스 제어 권한/UAC 처리 정책
-- 자동 처리 불가능한 충돌은 해당 단계에서만 사용자 선택 요청
-- 실패 시 자동 롤백
-- 최신/선택 버전 업데이트 실행
+핵심 업데이트 엔진 구현 및 실제 환경 검증 완료. 하드닝 진행 중.
+
+### PHP
+
+- [x] staging → 디렉터리 교체 → 자동 롤백
+- [x] Apache 자동 중지/재시작
+- [x] php.ini 마이그레이션 검토/편집/확정
+- [x] PHP Apache SAPI 설정 자동 갱신
+- [x] PHP extension 이름/legacy alias 변환
+- [x] PECL 외부 확장 자동 복원 시도
+- [x] browscap 파일 보존 및 최종 정합성 검사
+- [x] deprecated 설정 자동 비활성화
+- [x] VC++ Runtime 자동 확인/설치
+- [x] php -v / php -m / httpd -t 검증
+- [x] PHP 7.3.11 → 8.5.10 실제 환경 업데이트 성공
+- [x] PHP 8.2.12 → 8.5.10 실제 환경 업데이트 성공
+
+### Apache
+
+- [x] staging → 디렉터리 교체 → 자동 롤백
+- [x] 기존 conf 보존 및 편집 가능한 마이그레이션 검토
+- [x] 대상 httpd.exe로 교체 전 httpd -t 검증
+- [x] 절대 Apache 경로의 staging 검증용 임시 치환
+- [x] 참조 모듈 보존
+- [x] PE 정적 의존성 검사 및 Windows loader probe 진단
+- [x] VS18 VC++ Runtime 확인
+- [x] 기존 logs는 복사 보존하여 롤백 원본 유지
+- [x] 약한 XAMPP 자체서명 RSA 인증서 자동 재생성
+- [x] 서비스 시작 실패 시 상태 코드/error.log 진단
+- [x] Apache 2.4.41 → 2.4.68 실제 환경 업데이트 성공
+- [ ] 외부 모듈 자동 보존 경로와 검토 단계의 active conf 범위를 완전히 일치시키기
+- [ ] 검토 단계의 의존 DLL 자동 복구가 발생할 경우 실행 단계에도 동일 적용
+
+### MariaDB
+
+- [x] 전체 논리 백업 + 물리 백업 필수화
+- [x] 기존 mysql 전체를 롤백 원본으로 유지
+- [x] 새 MariaDB에는 data 사본만 복사
+- [x] my.ini/my.cnf 보존
+- [x] 서비스 기동 후 mariadb-upgrade/mysql_upgrade
+- [x] 업그레이드 인증정보 일회성 option 파일 처리
+- [x] 마이그레이션 검토 UI
+- [x] 동일 계열 패치 업데이트
+- [x] 직접 major 업그레이드
+- [x] MariaDB 10.4.8 → 10.4.34 실제 환경 성공
+- [x] MariaDB 10.4.34 → 10.6.28 직접 major 업그레이드 성공
+- [x] MariaDB 10.6.28 → 12.3.3 직접 major 업그레이드 성공
+
+### 공통 하드닝
+
+- [x] 영구 실행 로그
+- [x] 최근 로그 열기
+- [x] 창 타이틀에 빌드 시각 표시
+- [x] 패키지 캐시 재사용
+- [x] 실제 교체 직전 백업 파일 크기/SHA256 재검증
+- [x] 일반 권한에서는 검사/비교 가능, 서비스 제어가 필요한 실제 작업에서만 UAC 승격 재실행
+- [x] 승격 재실행 시 현재 XAMPP 경로 전달
+- [ ] 장시간 외부 프로세스 실행에 일관된 timeout 적용
+- [ ] 단계별 실시간 진행 callback 통일
+- [ ] 외부 모듈/extension ABI 및 의존성 판정 강화
 
 ## Phase 5 — Config Compare / Restore
 
-- 기존 설정과 신규 기본 설정 diff
-- 변경된 사용자 설정 식별
-- 구성요소별 복원 후보 표시
-- 선택 복원/병합
-- 충돌이 있는 설정은 자동 덮어쓰기하지 않음
-- 업데이트 전/후 설정 비교 이력 제공
+다음 작업.
+
+- [ ] 업데이트 전/후 설정 snapshot 저장
+- [ ] 기존 사용자 설정과 신규 기본값 분리 표시
+- [ ] 변경/추가/삭제 설정 식별
+- [ ] 구성요소별 선택 복원/병합
+- [ ] 충돌 항목은 자동 덮어쓰기하지 않고 사용자 선택
+- [ ] 업데이트 이력별 설정 비교
+- [ ] 이전 snapshot에서 선택 복원
 
 ## Phase 6 — Packaging & Release
 
-- 단일 배포 패키지 또는 self-contained 배포 결정
-- 앱 자체 업데이트
-- 로그/진단 정보 내보내기
-- 릴리스 빌드와 GitHub Actions 정리
+- [ ] self-contained 배포 방식 결정
+- [ ] 앱 자체 업데이트
+- [ ] 로그/진단 정보 내보내기
+- [ ] 릴리스 빌드 및 GitHub Actions 정리
