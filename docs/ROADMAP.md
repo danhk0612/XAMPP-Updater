@@ -77,8 +77,8 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 기존 설정/신규 기본 설정 diff
 - [x] 다운로드 패키지 캐시 재사용
 - [ ] 제공되는 경우 PGP 서명 신뢰 검증
-- [ ] 외부 Apache 모듈 ABI 판정 강화
-- [ ] PECL 외부 PHP extension의 의존 DLL 판정 강화
+- [ ] 외부 Apache 모듈 ABI 판정의 추가 정적 메타데이터 보강
+- [x] PECL 외부 PHP extension의 아키텍처/TS-NTS/PE 종속 DLL/Windows loader 판정
 
 ## Phase 4 — Assisted Update Engine
 
@@ -92,6 +92,10 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] PHP Apache SAPI 설정 자동 갱신
 - [x] PHP extension 이름/legacy alias 변환
 - [x] PECL 외부 확장 자동 복원 시도
+- [x] PECL ZIP의 종속 DLL이 대상 PHP 본체 DLL을 덮어쓰지 못하도록 보호
+- [x] 외부 extension PE 아키텍처 및 PHP major/TS-NTS runtime import 사전검사
+- [x] 외부 extension PE 종속성 그래프 및 Windows loader probe 사전검사
+- [x] PHP module API/build ID 불일치를 php -v / php -m 실제 로드 검사에서 차단
 - [x] browscap 파일 보존 및 최종 정합성 검사
 - [x] deprecated 설정 자동 비활성화
 - [x] VC++ Runtime 자동 확인/설치
@@ -146,7 +150,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 업데이트가 생성한 자식 프로세스의 사용자 취소/장시간 무응답 watchdog 및 프로세스 트리 종료
 - [x] Windows 서비스 START_PENDING/STOP_PENDING 경쟁 상태 안전 처리 및 상세 실패 진단
 - [ ] 단계별 실시간 진행 callback 통일
-- [ ] 외부 모듈/extension ABI 및 의존성 판정 강화
+- [ ] 외부 모듈/extension ABI 판정의 추가 정적 메타데이터 보강
 
 ## Phase 5 — Config Compare / Restore
 
