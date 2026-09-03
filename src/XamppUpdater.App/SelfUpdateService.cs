@@ -13,6 +13,8 @@ internal sealed record AppUpdateInfo(
     Uri ChecksumUri,
     string ReleasePageUrl);
 
+internal sealed record AppUpdateDownloadProgress(long BytesReceived, long? TotalBytes);
+
 internal sealed class SelfUpdateService
 {
     private const string LatestReleaseApi = "https://api.github.com/repos/danhk0612/XAMPP-Updater/releases/latest";
@@ -71,40 +73,73 @@ internal sealed class SelfUpdateService
         return new AppUpdateInfo(releaseVersion, tagName!, executableUri, checksumUri, releasePageUrl);
     }
 
-    public async Task<string> DownloadAndVerifyAsync(AppUpdateInfo update, CancellationToken cancellationToken = default)
+    public async Task<string> DownloadAsync(
+        AppUpdateInfo update,
+        IProgress<AppUpdateDownloadProgress>? progress,
+        CancellationToken cancellationToken)
     {
-        var updateRoot = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "XAMPP-Updater",
-            "SelfUpdate");
+        var updateRoot = GetUpdateRoot();
         Directory.CreateDirectory(updateRoot);
 
-        var stagedPath = Path.Combine(updateRoot, $"XAMPP-Updater-{update.Version}.exe");
-        var tempPath = stagedPath + ".download";
+        var tempPath = Path.Combine(updateRoot, $"XAMPP-Updater-{update.Version}.exe.download");
         if (File.Exists(tempPath)) File.Delete(tempPath);
 
-        using (var response = await HttpClient.GetAsync(update.ExecutableUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken))
+        try
         {
+            using var response = await HttpClient.GetAsync(update.ExecutableUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             response.EnsureSuccessStatusCode();
+
+            var totalBytes = response.Content.Headers.ContentLength;
             await using var input = await response.Content.ReadAsStreamAsync(cancellationToken);
             await using var output = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None, 1024 * 128, true);
-            await input.CopyToAsync(output, cancellationToken);
+            var buffer = new byte[1024 * 128];
+            long received = 0;
+
+            while (true)
+            {
+                var read = await input.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken);
+                if (read == 0) break;
+                await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                received += read;
+                progress?.Report(new AppUpdateDownloadProgress(received, totalBytes));
+            }
+
+            progress?.Report(new AppUpdateDownloadProgress(received, totalBytes));
+            return tempPath;
         }
-
-        var checksumText = (await HttpClient.GetStringAsync(update.ChecksumUri, cancellationToken)).Trim();
-        var expectedHash = checksumText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length != 64)
-            throw new InvalidOperationException("릴리스 SHA256 검증 파일 형식이 올바르지 않습니다.");
-
-        await using (var stream = File.OpenRead(tempPath))
+        catch
         {
-            var actualHash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken));
-            if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("다운로드한 앱의 SHA256이 릴리스 검증값과 일치하지 않습니다.");
+            TryDelete(tempPath);
+            throw;
         }
+    }
 
-        File.Move(tempPath, stagedPath, true);
-        return stagedPath;
+    public async Task<string> VerifyAndStageAsync(AppUpdateInfo update, string downloadedPath)
+    {
+        try
+        {
+            var checksumText = (await HttpClient.GetStringAsync(update.ChecksumUri)).Trim();
+            var expectedHash = checksumText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(expectedHash) || expectedHash.Length != 64)
+                throw new InvalidOperationException("릴리스 SHA256 검증 파일 형식이 올바르지 않습니다.");
+
+            await using (var stream = File.OpenRead(downloadedPath))
+            {
+                var actualHash = Convert.ToHexString(await SHA256.HashDataAsync(stream));
+                if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("다운로드한 앱의 SHA256이 릴리스 검증값과 일치하지 않습니다.");
+            }
+
+            var stagedPath = Path.Combine(GetUpdateRoot(), $"XAMPP-Updater-{update.Version}.exe");
+            if (File.Exists(stagedPath)) File.Delete(stagedPath);
+            File.Move(downloadedPath, stagedPath);
+            return stagedPath;
+        }
+        catch
+        {
+            TryDelete(downloadedPath);
+            throw;
+        }
     }
 
     public void StartReplacement(string stagedExecutablePath)
@@ -165,6 +200,16 @@ internal sealed class SelfUpdateService
         return Version.TryParse(normalized, out version!);
     }
 
+    private static string GetUpdateRoot() => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "XAMPP-Updater",
+        "SelfUpdate");
+
+    private static void TryDelete(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); } catch { }
+    }
+
     private static bool CanWriteDirectory(string directory)
     {
         var probePath = Path.Combine(directory, $".xampp-updater-write-{Guid.NewGuid():N}.tmp");
@@ -176,7 +221,7 @@ internal sealed class SelfUpdateService
         }
         catch
         {
-            try { if (File.Exists(probePath)) File.Delete(probePath); } catch { }
+            TryDelete(probePath);
             return false;
         }
     }
@@ -192,7 +237,7 @@ $ErrorActionPreference = 'Stop'
 function Write-UpdateLog([string]$Message) {
     Add-Content -LiteralPath $LogPath -Value (('[{0:yyyy-MM-dd HH:mm:ss}] {1}' -f (Get-Date), $Message)) -Encoding UTF8
 }
-$backup = $Target + '.xampp-updater-old'
+$backup = $Target + '.update-backup'
 try {
     Write-UpdateLog ('Waiting for PID ' + $ParentPid)
     while (Get-Process -Id $ParentPid -ErrorAction SilentlyContinue) {
@@ -204,8 +249,9 @@ try {
     $sourceHash = (Get-FileHash -LiteralPath $Source -Algorithm SHA256).Hash
     $targetHash = (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash
     if ($sourceHash -ne $targetHash) { throw 'Replaced executable hash mismatch.' }
-    Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target)
-    Start-Sleep -Milliseconds 500
+    $newProcess = Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target) -PassThru
+    Start-Sleep -Seconds 2
+    if ($newProcess.HasExited) { throw ('Updated application exited immediately with code ' + $newProcess.ExitCode) }
     Remove-Item -LiteralPath $backup -Force
     Write-UpdateLog 'Update applied and application restarted.'
 }
@@ -213,7 +259,8 @@ catch {
     Write-UpdateLog ('ERROR: ' + $_.Exception.Message)
     if (Test-Path -LiteralPath $backup) {
         Copy-Item -LiteralPath $backup -Destination $Target -Force
-        Write-UpdateLog 'Previous executable restored.'
+        Write-UpdateLog 'Previous executable restored from .update-backup.'
+        try { Start-Process -FilePath $Target -WorkingDirectory (Split-Path -Parent $Target) } catch { }
     }
     exit 1
 }
