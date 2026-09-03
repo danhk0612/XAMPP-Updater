@@ -110,8 +110,9 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 - [x] 약한 XAMPP 자체서명 RSA 인증서 자동 재생성
 - [x] 서비스 시작 실패 시 상태 코드/error.log 진단
 - [x] Apache 2.4.41 → 2.4.68 실제 환경 업데이트 성공
-- [ ] 외부 모듈 자동 보존 경로와 검토 단계의 active conf 범위를 완전히 일치시키기
-- [ ] 검토 단계의 의존 DLL 자동 복구가 발생할 경우 실행 단계에도 동일 적용
+- [x] 검토에서만 가능한 의존 DLL 임시 복구가 발생하면 실제 실행 가능으로 오판하지 않도록 차단
+- [ ] 외부 모듈 자동 보존 경로와 실행 단계의 active conf 범위를 완전히 일치시키기
+- [ ] 검토 단계의 의존 DLL 자동 복구가 필요한 경우 실행 단계에도 동일 복구 적용
 
 ### MariaDB
 
@@ -143,15 +144,27 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 
 ## Phase 5 — Config Compare / Restore
 
-다음 작업.
+핵심 snapshot 비교/복원 기능 구현 및 실제 Apache 복원 검증 완료. 선택 병합 기능을 남겨둔다.
 
-- [ ] 업데이트 전/후 설정 snapshot 저장
-- [ ] 기존 사용자 설정과 신규 기본값 분리 표시
-- [ ] 변경/추가/삭제 설정 식별
-- [ ] 구성요소별 선택 복원/병합
-- [ ] 충돌 항목은 자동 덮어쓰기하지 않고 사용자 선택
-- [ ] 업데이트 이력별 설정 비교
-- [ ] 이전 snapshot에서 선택 복원
+- [x] 업데이트 전/후 설정 snapshot 자동 저장
+- [x] 수동 현재 설정 snapshot + 사용자 메모
+- [x] 파일별 SHA256/크기 manifest
+- [x] snapshot 무결성 검사
+- [x] 업데이트/복원 이력별 설정 비교
+- [x] DiffPlex 기반 좌우 내용 diff, 변경 강조/줄 번호/차이 이동
+- [x] 현재 설정과 과거 snapshot 즉시 비교
+- [x] snapshot 메모 수정/삭제/폴더 열기
+- [x] 이전 snapshot 전체 설정 복원
+- [x] 복원 직전 BeforeRestore 안전 snapshot
+- [x] 복원 성공 후 AfterRestore 이력 snapshot
+- [x] Apache httpd -t / PHP php -v / MariaDB 설정 파싱 검증
+- [x] 실행 중이던 서비스의 중지/재시작 및 실패 시 자동 원복
+- [x] Apache 설정 snapshot 실제 복원 성공 확인
+- [x] 기존 사용자 설정과 신규 기본값 분리 표시(업데이트 마이그레이션 검토)
+- [x] 변경/추가/삭제 설정 파일 식별
+- [ ] 파일 단위 선택 복원/병합
+- [ ] ini/conf 항목 단위 선택 병합
+- [ ] 충돌 항목 사용자 선택 후 적용
 
 ## Phase 6 — Packaging & Release
 
