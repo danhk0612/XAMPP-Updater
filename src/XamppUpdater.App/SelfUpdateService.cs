@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -197,7 +198,9 @@ internal sealed class SelfUpdateService
         if (normalized.StartsWith('v') || normalized.StartsWith('V')) normalized = normalized[1..];
         var suffixIndex = normalized.IndexOfAny(['-', '+']);
         if (suffixIndex >= 0) normalized = normalized[..suffixIndex];
-        return Version.TryParse(normalized, out version!);
+        if (!Version.TryParse(normalized, out var parsedVersion) || parsedVersion is null) return false;
+        version = parsedVersion;
+        return true;
     }
 
     private static string GetUpdateRoot() => Path.Combine(
