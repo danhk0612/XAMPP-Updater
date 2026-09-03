@@ -48,7 +48,19 @@ public partial class MainWindow
         CancellationTokenSource? downloadCancellation = null;
         try
         {
-            var update = await _selfUpdateService.CheckLatestAsync();
+            var (update, releaseExists) = await _selfUpdateService.CheckLatestAsync();
+            if (!releaseExists)
+            {
+                StatusText.Text = "아직 게시된 XAMPP Updater 릴리스가 없습니다.";
+                MessageBox.Show(
+                    this,
+                    "아직 GitHub에 게시된 XAMPP Updater 릴리스가 없습니다.\n\n첫 릴리스가 게시된 이후부터 앱 자체 업데이트를 사용할 수 있습니다.",
+                    "앱 업데이트",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
+                return;
+            }
+
             if (update is null)
             {
                 StatusText.Text = $"XAMPP Updater는 최신 버전입니다. ({_selfUpdateService.CurrentVersion.ToString(3)})";
