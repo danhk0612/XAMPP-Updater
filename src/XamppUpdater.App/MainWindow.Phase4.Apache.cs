@@ -10,7 +10,7 @@ namespace XamppUpdater.App;
 
 public partial class MainWindow
 {
-    private readonly IApacheUpdateExecutor _apacheUpdateExecutor = new ApacheUpdateExecutor();
+    private readonly IApacheUpdateExecutor _apacheUpdateExecutor = new VerifiedApacheUpdateExecutor();
     private readonly IApacheMigrationReviewService _apacheMigrationReviewService = new ApacheMigrationReviewService();
     private readonly IApacheMigrationOverrideStore _apacheMigrationOverrideStore = new ApacheMigrationOverrideStore();
     private Button? _apacheExecuteButton;
