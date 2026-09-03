@@ -9,7 +9,7 @@ namespace XamppUpdater.App;
 
 public partial class MainWindow
 {
-    private readonly IMariaDbUpdateExecutor _mariaDbUpdateExecutor = new MariaDbUpdateExecutor();
+    private readonly IMariaDbUpdateExecutor _mariaDbUpdateExecutor = new SnapshottingMariaDbUpdateExecutor();
     private readonly IMariaDbMigrationReviewService _mariaDbMigrationReviewService = new MariaDbMigrationReviewService();
     private Button? _mariaDbReviewButton;
     private Button? _mariaDbExecuteButton;
