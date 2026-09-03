@@ -175,7 +175,7 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
 
 ## Phase 6 — Packaging & Release
 
-구현은 대부분 완료했다. 일반 branch/PR CI에서 빌드·smoke test·self-contained publish·EXE 검증·artifact 업로드까지 확인했으며, 실제 `v*` 태그 릴리스와 구버전 EXE에서의 자체 업데이트 왕복 검증을 최종 확인 항목으로 남긴다.
+릴리스 자동화와 실제 GitHub Release 게시까지 확인했다. `v0.1.0`과 `v0.1.1`을 공개 Release로 생성했고 두 릴리스 모두 `XAMPP-Updater.exe`와 `XAMPP-Updater.exe.sha256` 자산 게시를 확인했다. GitHub `releases/latest`가 `v0.1.1`을 반환하는 것도 확인했다. 남은 핵심 검증은 Windows에서 배포된 `v0.1.0` EXE를 실제 실행하여 `v0.1.1`로 자체 업데이트하는 왕복 테스트다.
 
 - [x] self-contained 배포 방식 결정
   - win-x64
@@ -199,11 +199,19 @@ XAMPP 전체 재설치나 다른 구성요소(Node.js, Perl, Tomcat, phpMyAdmin 
   - win-x64 self-contained publish
   - publish된 `XAMPP-Updater.exe` 버전 검증
   - 일반 빌드 artifact 업로드
-  - `v*` 태그에서 SHA256 생성 및 GitHub Release asset 게시 구성
-- [ ] 실제 `v*` 태그 빌드에서 GitHub Release EXE/SHA256 게시 확인
+  - `v*` 태그 및 `release/v*` 릴리스 브랜치에서 SHA256 생성/GitHub Release 게시 경로 구성
+- [x] 실제 GitHub Release EXE/SHA256 게시 확인
+  - `v0.1.0` 공개 Release 게시 성공
+  - `v0.1.1` 공개 Release 게시 성공
+  - 두 Release 모두 EXE + SHA256 자산 존재
+  - `releases/latest` → `v0.1.1` 확인
+  - 현재 연결 도구에는 직접 Git 태그 생성 액션이 없어 외부 `v*` 태그 push 이벤트 자체는 별도 실행하지 못함
+  - `release/v*` Actions가 생성한 태그는 `GITHUB_TOKEN` 재귀 실행 방지 때문에 별도의 태그-trigger workflow run을 만들지 않음
 - [ ] 구버전 배포 EXE → 신규 GitHub Release 자체 업데이트 왕복 확인
+  - `v0.1.0` EXE에서 `v0.1.1` 감지
   - 다운로드 진행률 및 취소
   - SHA256 검증
   - 5초/즉시 재시작
-  - EXE 교체
-  - 실패 시 `.update-backup` 복원
+  - EXE 교체 후 0.1.1 실행
+  - 성공 시 `.update-backup` 정리 확인
+  - 실패 경로에서 `.update-backup` 복원 확인
