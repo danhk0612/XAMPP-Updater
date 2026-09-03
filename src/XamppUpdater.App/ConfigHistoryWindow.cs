@@ -58,6 +58,8 @@ public sealed class ConfigHistoryWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0)
         };
+        var manual = new Button { Content = "현재 설정 snapshot 저장", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
+        manual.Click += ManualSnapshot_Click;
         var open = new Button { Content = "선택 snapshot 폴더 열기", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
         open.Click += (_, _) => OpenSelectedFolder();
         var compare = new Button { Content = "선택한 2개 내용 비교", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 6) };
@@ -66,6 +68,7 @@ public sealed class ConfigHistoryWindow : Window
         restore.Click += RestoreSelected_Click;
         var close = new Button { Content = "닫기", Padding = new Thickness(18, 5, 18, 5), Margin = new Thickness(0, 0, 0, 6), IsCancel = true };
         close.Click += (_, _) => Close();
+        buttons.Children.Add(manual);
         buttons.Children.Add(open);
         buttons.Children.Add(compare);
         buttons.Children.Add(restore);
@@ -78,6 +81,29 @@ public sealed class ConfigHistoryWindow : Window
         ReloadSnapshots();
     }
 
+    private void ManualSnapshot_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new ManualSnapshotDialog(_type.ToString()) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        try
+        {
+            var version = _installation.Components.FirstOrDefault(item => item.Type == _type)?.Version;
+            var snapshot = _snapshots.Capture(_installation.RootPath, _type, version, "Manual", dialog.Note);
+            ReloadSnapshots();
+            SelectSnapshot(snapshot.ManifestPath);
+            MessageBox.Show(this,
+                $"현재 {_type} 설정 snapshot을 저장했습니다.\n\n{snapshot.ManifestPath}",
+                "설정 snapshot",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "설정 snapshot", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
     private void ReloadSnapshots()
     {
         _list.Items.Clear();
@@ -86,11 +112,22 @@ public sealed class ConfigHistoryWindow : Window
 
         if (_list.Items.Count == 0)
         {
-            _details.Text = "저장된 설정 snapshot이 없습니다.\r\n\r\n이 기능이 적용된 버전으로 업데이트를 실행하면 업데이트 전/후 snapshot이 자동 저장됩니다.";
+            _details.Text = "저장된 설정 snapshot이 없습니다.\r\n\r\n'현재 설정 snapshot 저장'으로 기준점을 만들거나, 업데이트 실행 시 자동으로 전/후 snapshot이 저장됩니다.";
         }
         else
         {
             _list.SelectedIndex = 0;
+        }
+    }
+
+    private void SelectSnapshot(string manifestPath)
+    {
+        foreach (var item in _list.Items.OfType<SnapshotItem>())
+        {
+            if (!string.Equals(item.Manifest.ManifestPath, manifestPath, StringComparison.OrdinalIgnoreCase)) continue;
+            _list.SelectedItem = item;
+            _list.ScrollIntoView(item);
+            return;
         }
     }
 
@@ -102,6 +139,7 @@ public sealed class ConfigHistoryWindow : Window
             $"캡처: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss.fff}\r\n" +
             $"단계: {snapshot.Stage}\r\n" +
             $"버전: {snapshot.Version ?? "Unknown"}\r\n" +
+            $"메모: {snapshot.Note ?? "(없음)"}\r\n" +
             $"XAMPP: {snapshot.XamppRoot}\r\n" +
             $"manifest: {snapshot.ManifestPath}\r\n" +
             $"설정 파일: {snapshot.Files.Count}개\r\n\r\n" +
@@ -145,7 +183,8 @@ public sealed class ConfigHistoryWindow : Window
             $"{_type} 설정을 선택한 snapshot 상태로 복원합니다.\n\n" +
             $"snapshot: {snapshot.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
             $"당시 버전: {snapshot.Version ?? "Unknown"}\n" +
-            $"단계: {snapshot.Stage}\n\n" +
+            $"단계: {snapshot.Stage}\n" +
+            $"메모: {snapshot.Note ?? "(없음)"}\n\n" +
             "현재 설정은 복원 직전에 별도 안전 snapshot으로 자동 저장합니다. " +
             "적용 후 구성요소별 검증을 수행하고 실패하면 직전 설정으로 자동 원복합니다. 계속하시겠습니까?",
             "설정 snapshot 복원",
@@ -165,7 +204,7 @@ public sealed class ConfigHistoryWindow : Window
             if (result.Success)
             {
                 MessageBox.Show(this,
-                    $"{_type} 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}",
+                    $"{_type} 설정 복원이 완료되었습니다.\n\n복원 직전 안전 snapshot:\n{result.SafetySnapshotPath}\n\n복원 후 snapshot:\n{result.AfterRestoreSnapshotPath}",
                     "설정 복원",
                     MessageBoxButton.OK,
                     MessageBoxImage.Information);
@@ -202,6 +241,10 @@ public sealed class ConfigHistoryWindow : Window
     {
         public SnapshotItem(ConfigSnapshotManifest manifest) => Manifest = manifest;
         public ConfigSnapshotManifest Manifest { get; }
-        public override string ToString() => $"{Manifest.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}  {Manifest.Stage}  {Manifest.Version ?? "Unknown"}  ({Manifest.Files.Count}개)";
+        public override string ToString()
+        {
+            var note = string.IsNullOrWhiteSpace(Manifest.Note) ? string.Empty : $"  [{Manifest.Note.Replace("\r", " ").Replace("\n", " ")}]";
+            return $"{Manifest.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}  {Manifest.Stage}  {Manifest.Version ?? "Unknown"}  ({Manifest.Files.Count}개){note}";
+        }
     }
 }
