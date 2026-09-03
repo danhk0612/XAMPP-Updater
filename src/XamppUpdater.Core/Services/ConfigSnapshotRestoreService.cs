@@ -10,6 +10,12 @@ public interface IConfigSnapshotRestoreService
         XamppInstallation installation,
         ConfigSnapshotManifest snapshot,
         CancellationToken cancellationToken = default);
+
+    Task<ConfigSnapshotRestoreResult> RestoreSelectedAsync(
+        XamppInstallation installation,
+        ConfigSnapshotManifest snapshot,
+        IReadOnlyCollection<string> relativePaths,
+        CancellationToken cancellationToken = default);
 }
 
 public sealed record ConfigSnapshotRestoreResult(
@@ -20,7 +26,7 @@ public sealed record ConfigSnapshotRestoreResult(
     IReadOnlyList<string> Steps,
     string? Error = null);
 
-public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
+public sealed partial class ConfigSnapshotRestoreService
 {
     private readonly IConfigSnapshotService _snapshots;
     private readonly IWindowsServiceController _services;
@@ -95,16 +101,10 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
             }
             catch (Exception captureEx)
             {
-                // 설정 적용/검증 자체가 성공한 뒤의 이력 저장 실패는 복원 실패로 취급하지 않는다.
                 steps.Add("주의: 복원 후 설정 snapshot 저장 실패: " + captureEx.Message);
             }
 
-            return new ConfigSnapshotRestoreResult(
-                true,
-                false,
-                safety.ManifestPath,
-                afterRestore?.ManifestPath,
-                steps);
+            return new ConfigSnapshotRestoreResult(true, false, safety.ManifestPath, afterRestore?.ManifestPath, steps);
         }
         catch (Exception ex)
         {
@@ -141,13 +141,7 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
                 }
             }
 
-            return new ConfigSnapshotRestoreResult(
-                false,
-                rolledBack,
-                safety?.ManifestPath,
-                null,
-                steps,
-                error);
+            return new ConfigSnapshotRestoreResult(false, rolledBack, safety?.ManifestPath, null, steps, error);
         }
         finally
         {
@@ -188,8 +182,7 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
     {
         var componentRoot = GetComponentRoot(snapshot.XamppRoot, snapshot.Type);
         var filesRoot = Path.Combine(Path.GetDirectoryName(snapshot.ManifestPath)!, "files");
-        var wanted = snapshot.Files.Select(item => item.RelativePath.Replace('\\', '/'))
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var wanted = snapshot.Files.Select(item => item.RelativePath.Replace('\\', '/')).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var current in EnumerateManagedConfigFiles(componentRoot, snapshot.Type))
         {
@@ -206,25 +199,12 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
         }
     }
 
-    private static async Task<string> ValidateComponentAsync(
-        XamppInstallation installation,
-        XamppComponentType type,
-        CancellationToken cancellationToken)
+    private static async Task<string> ValidateComponentAsync(XamppInstallation installation, XamppComponentType type, CancellationToken cancellationToken)
     {
         return type switch
         {
-            XamppComponentType.Apache => await RunValidationAsync(
-                Path.Combine(installation.RootPath, "apache", "bin", "httpd.exe"),
-                "-t",
-                Path.Combine(installation.RootPath, "apache"),
-                "Apache httpd -t 설정 검증 통과",
-                cancellationToken),
-            XamppComponentType.Php => await RunValidationAsync(
-                Path.Combine(installation.RootPath, "php", "php.exe"),
-                "-v",
-                Path.Combine(installation.RootPath, "php"),
-                "PHP php -v 설정 검증 통과",
-                cancellationToken),
+            XamppComponentType.Apache => await RunValidationAsync(Path.Combine(installation.RootPath, "apache", "bin", "httpd.exe"), "-t", Path.Combine(installation.RootPath, "apache"), "Apache httpd -t 설정 검증 통과", cancellationToken),
+            XamppComponentType.Php => await RunValidationAsync(Path.Combine(installation.RootPath, "php", "php.exe"), "-v", Path.Combine(installation.RootPath, "php"), "PHP php -v 설정 검증 통과", cancellationToken),
             XamppComponentType.MariaDb => await ValidateMariaDbAsync(installation, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(type))
         };
@@ -233,44 +213,17 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
     private static async Task<string> ValidateMariaDbAsync(XamppInstallation installation, CancellationToken cancellationToken)
     {
         var mysqlRoot = Path.Combine(installation.RootPath, "mysql");
-        var executable = new[]
-        {
-            Path.Combine(mysqlRoot, "bin", "mariadbd.exe"),
-            Path.Combine(mysqlRoot, "bin", "mysqld.exe")
-        }.FirstOrDefault(File.Exists) ?? throw new FileNotFoundException("MariaDB 서버 실행 파일을 찾을 수 없습니다.");
-
-        var config = new[]
-        {
-            Path.Combine(mysqlRoot, "bin", "my.ini"),
-            Path.Combine(mysqlRoot, "my.ini"),
-            Path.Combine(mysqlRoot, "bin", "my.cnf"),
-            Path.Combine(mysqlRoot, "my.cnf")
-        }.FirstOrDefault(File.Exists);
-
-        var args = config is null
-            ? "--help --verbose"
-            : $"--defaults-file=\"{config}\" --help --verbose";
+        var executable = new[] { Path.Combine(mysqlRoot, "bin", "mariadbd.exe"), Path.Combine(mysqlRoot, "bin", "mysqld.exe") }
+            .FirstOrDefault(File.Exists) ?? throw new FileNotFoundException("MariaDB 서버 실행 파일을 찾을 수 없습니다.");
+        var config = new[] { Path.Combine(mysqlRoot, "bin", "my.ini"), Path.Combine(mysqlRoot, "my.ini"), Path.Combine(mysqlRoot, "bin", "my.cnf"), Path.Combine(mysqlRoot, "my.cnf") }.FirstOrDefault(File.Exists);
+        var args = config is null ? "--help --verbose" : $"--defaults-file=\"{config}\" --help --verbose";
         return await RunValidationAsync(executable, args, mysqlRoot, "MariaDB 설정 파싱 검증 통과", cancellationToken);
     }
 
-    private static async Task<string> RunValidationAsync(
-        string executable,
-        string arguments,
-        string workingDirectory,
-        string successMessage,
-        CancellationToken cancellationToken)
+    private static async Task<string> RunValidationAsync(string executable, string arguments, string workingDirectory, string successMessage, CancellationToken cancellationToken)
     {
         if (!File.Exists(executable)) throw new FileNotFoundException("검증 실행 파일을 찾을 수 없습니다.", executable);
-        var start = new ProcessStartInfo
-        {
-            FileName = executable,
-            Arguments = arguments,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
+        var start = new ProcessStartInfo { FileName = executable, Arguments = arguments, WorkingDirectory = workingDirectory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true };
         using var process = Process.Start(start) ?? throw new InvalidOperationException("설정 검증 프로세스를 시작하지 못했습니다.");
         var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
@@ -278,15 +231,13 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
         timeout.CancelAfter(TimeSpan.FromSeconds(30));
         await process.WaitForExitAsync(timeout.Token);
         var output = (await stdoutTask + Environment.NewLine + await stderrTask).Trim();
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException($"설정 검증 실패 (exit={process.ExitCode}): {Compact(output)}");
+        if (process.ExitCode != 0) throw new InvalidOperationException($"설정 검증 실패 (exit={process.ExitCode}): {Compact(output)}");
         return successMessage;
     }
 
     private static string? ResolveServiceName(XamppInstallation installation, XamppComponentType type)
     {
-        if (type == XamppComponentType.Php)
-            return installation.Components.FirstOrDefault(item => item.Type == XamppComponentType.Apache)?.ServiceName;
+        if (type == XamppComponentType.Php) return installation.Components.FirstOrDefault(item => item.Type == XamppComponentType.Apache)?.ServiceName;
         return installation.Components.FirstOrDefault(item => item.Type == type)?.ServiceName;
     }
 
@@ -316,7 +267,6 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
             }
             yield break;
         }
-
         var confRoot = Path.Combine(componentRoot, "conf");
         if (!Directory.Exists(confRoot)) yield break;
         foreach (var file in Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories))
@@ -330,8 +280,7 @@ public sealed class ConfigSnapshotRestoreService : IConfigSnapshotRestoreService
     {
         var fullRoot = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
         var full = Path.GetFullPath(Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar)));
-        if (!full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidDataException("snapshot 상대 경로가 허용된 루트를 벗어납니다: " + relative);
+        if (!full.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("snapshot 상대 경로가 허용된 루트를 벗어납니다: " + relative);
         return full;
     }
 
