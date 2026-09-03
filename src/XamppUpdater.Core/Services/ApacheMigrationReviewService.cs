@@ -75,11 +75,30 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             ZipFile.ExtractToDirectory(package.PackagePath, extractRoot, overwriteFiles: true);
             var stagedRoot = ResolvePayloadRoot(extractRoot, package.PayloadEntry);
             var stagedConf = Path.Combine(stagedRoot, "conf");
+            var httpd = Path.Combine(stagedRoot, "bin", "httpd.exe");
+            var items = new List<ApacheMigrationReviewItem>();
 
+            // First prove that the downloaded Apache package itself works in this machine.
+            // This cleanly separates package/runtime problems from migration-config problems.
+            var vendorMainConf = Path.Combine(stagedConf, "httpd.conf");
+            if (File.Exists(vendorMainConf))
+            {
+                RewriteServerRootForValidation(vendorMainConf, stagedRoot, items, "새 Apache 기본 설정");
+                var vendorValidation = await RunAsync(httpd, new[] { "-t", "-f", vendorMainConf }, stagedRoot, cancellationToken);
+                var vendorValid = IsSyntaxValid(vendorValidation);
+                items.Add(new ApacheMigrationReviewItem(
+                    vendorValid ? ApacheMigrationReviewKind.AutomaticChange : ApacheMigrationReviewKind.NeedsReview,
+                    vendorValid
+                        ? $"새 Apache {target.Version} 패키지 기본 설정 검증 통과: httpd -t"
+                        : "새 Apache 패키지 기본 설정 자체가 검증에 실패했습니다: " + Compact(vendorValidation.Output)));
+                if (!vendorValid && vendorValidation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase))
+                    AddModuleDependencyDiagnostics(stagedRoot, vendorValidation.Output, items);
+            }
+
+            // Replace vendor conf with the current XAMPP conf for migration validation.
             if (Directory.Exists(stagedConf)) Directory.Delete(stagedConf, recursive: true);
             CopyDirectory(currentConf, stagedConf);
 
-            var items = new List<ApacheMigrationReviewItem>();
             var saved = _overrideStore.TryLoad(installation.RootPath, target.Version, currentConf);
             if (saved is not null)
             {
@@ -89,6 +108,7 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
                     $"사용자가 확정한 Apache 설정 적용안 사용: {saved.ConfirmedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss}"));
             }
 
+            // Proposed files are captured before staging-only path rewrites so Review temp paths can never be persisted.
             var proposedFiles = ReadFiles(stagedConf);
             var configFiles = proposedFiles.Keys
                 .Select(path => "conf/" + path.Replace('\\', '/'))
@@ -110,9 +130,9 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             if (!File.Exists(mainConf))
                 throw new FileNotFoundException("기존 Apache httpd.conf를 찾을 수 없습니다.", mainConf);
 
-            RewriteServerRootForValidation(mainConf, stagedRoot, items);
+            RewriteServerRootForValidation(mainConf, stagedRoot, items, "기존 XAMPP 설정");
+            RewriteAbsoluteApacheReferencesForValidation(stagedConf, currentRoot, stagedRoot, items);
 
-            var httpd = Path.Combine(stagedRoot, "bin", "httpd.exe");
             var validation = await RunAsync(httpd, new[] { "-t", "-f", mainConf }, stagedRoot, cancellationToken);
             if (validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase) &&
                 TryRepairMissingModuleDependencies(stagedRoot, validation.Output, items))
@@ -126,10 +146,7 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             if (validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase))
                 AddModuleDependencyDiagnostics(stagedRoot, validation.Output, items);
 
-            var syntaxValid = validation.ExitCode == 0 &&
-                              !validation.Output.Contains("Syntax error", StringComparison.OrdinalIgnoreCase) &&
-                              !validation.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase);
-
+            var syntaxValid = IsSyntaxValid(validation);
             items.Add(new ApacheMigrationReviewItem(
                 syntaxValid ? ApacheMigrationReviewKind.AutomaticChange : ApacheMigrationReviewKind.NeedsReview,
                 syntaxValid
@@ -150,6 +167,11 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             TryDeleteDirectory(reviewRoot);
         }
     }
+
+    private static bool IsSyntaxValid(ProcessResult result) =>
+        result.ExitCode == 0 &&
+        !result.Output.Contains("Syntax error", StringComparison.OrdinalIgnoreCase) &&
+        !result.Output.Contains("Cannot load", StringComparison.OrdinalIgnoreCase);
 
     private static Dictionary<string, string> ReadFiles(string confRoot)
     {
@@ -188,14 +210,14 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
         return Directory.GetParent(bin)?.FullName ?? throw new InvalidDataException("Apache 패키지 루트를 확인할 수 없습니다.");
     }
 
-    private static void RewriteServerRootForValidation(string mainConf, string stagedRoot, ICollection<ApacheMigrationReviewItem> items)
+    private static void RewriteServerRootForValidation(
+        string mainConf,
+        string stagedRoot,
+        ICollection<ApacheMigrationReviewItem> items,
+        string context)
     {
         var original = File.ReadAllText(mainConf);
         var apachePath = stagedRoot.Replace('\\', '/');
-
-        // XAMPP Apache configurations can contain both directives independently.
-        // Rewriting only Define SRVROOT can leave a literal ServerRoot pointing at the live Apache,
-        // causing the new httpd.exe to load old modules during the staging validation.
         var updated = DefineSrvRootRegex().Replace(original, $"Define SRVROOT \"{apachePath}\"");
         updated = ServerRootRegex().Replace(updated, $"ServerRoot \"{apachePath}\"");
 
@@ -204,7 +226,39 @@ public sealed partial class ApacheMigrationReviewService : IApacheMigrationRevie
             File.WriteAllText(mainConf, updated);
             items.Add(new ApacheMigrationReviewItem(
                 ApacheMigrationReviewKind.AutomaticChange,
-                "검토용 Define SRVROOT/ServerRoot를 임시 Apache 경로로 변경하여 사전 검증"));
+                $"{context}: 검토용 Define SRVROOT/ServerRoot를 임시 Apache 경로로 변경"));
+        }
+    }
+
+    private static void RewriteAbsoluteApacheReferencesForValidation(
+        string confRoot,
+        string currentRoot,
+        string stagedRoot,
+        ICollection<ApacheMigrationReviewItem> items)
+    {
+        var oldBackslash = Path.GetFullPath(currentRoot).TrimEnd('\\', '/');
+        var oldForward = oldBackslash.Replace('\\', '/');
+        var stagedBackslash = Path.GetFullPath(stagedRoot).TrimEnd('\\', '/');
+        var stagedForward = stagedBackslash.Replace('\\', '/');
+        var changedFiles = new List<string>();
+
+        foreach (var file in Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories)
+                     .Where(path => IsActiveConfig(confRoot, path)))
+        {
+            var original = File.ReadAllText(file);
+            var updated = original
+                .Replace(oldBackslash, stagedBackslash, StringComparison.OrdinalIgnoreCase)
+                .Replace(oldForward, stagedForward, StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(original, updated, StringComparison.Ordinal)) continue;
+            File.WriteAllText(file, updated);
+            changedFiles.Add(Path.GetRelativePath(confRoot, file).Replace('\\', '/'));
+        }
+
+        if (changedFiles.Count > 0)
+        {
+            items.Add(new ApacheMigrationReviewItem(
+                ApacheMigrationReviewKind.AutomaticChange,
+                $"사전 검증용 기존 Apache 절대경로 참조를 임시 경로로 변환: {changedFiles.Count}개 설정 파일 ({string.Join(", ", changedFiles.Take(8))}{(changedFiles.Count > 8 ? ", ..." : string.Empty)})"));
         }
     }
 
