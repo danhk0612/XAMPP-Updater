@@ -22,3 +22,20 @@ jobs:
         run: dotnet build XamppUpdater.sln --configuration Release --no-restore
       - name: Smoke tests
         run: dotnet run --project .\tests\XamppUpdater.Core.SmokeTests\XamppUpdater.Core.SmokeTests.csproj --configuration Release --no-build
+      - name: Publish win-x64 self-contained
+        run: dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj --configuration Release --no-restore -p:PublishProfile=win-x64 -o .\artifacts\win-x64
+      - name: Verify published executable
+        shell: pwsh
+        run: |
+          $exe = '.\artifacts\win-x64\XamppUpdater.App.exe'
+          if (-not (Test-Path $exe)) { throw "Published executable not found: $exe" }
+          $item = Get-Item $exe
+          if ($item.Length -le 0) { throw 'Published executable is empty.' }
+          Write-Host "Published: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB"
+      - name: Upload win-x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: XAMPP-Updater-win-x64
+          path: .\artifacts\win-x64\
+          if-no-files-found: error
+          retention-days: 14
