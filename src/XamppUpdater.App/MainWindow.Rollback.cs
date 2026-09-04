@@ -9,7 +9,7 @@ namespace XamppUpdater.App;
 public partial class MainWindow
 {
     private readonly IRollbackBackupCatalogService _rollbackCatalog = new RollbackBackupCatalogService();
-    private readonly IComponentRollbackService _componentRollbackService = new ComponentRollbackService();
+    private readonly IComponentRollbackService _componentRollbackService = new IntegrationCheckedComponentRollbackService();
     private readonly Dictionary<XamppComponentType, Button> _rollbackButtons = new();
     private DispatcherTimer? _catalogRefreshTimer;
     private bool _catalogRefreshRunning;
