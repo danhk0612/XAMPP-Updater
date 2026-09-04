@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -40,9 +41,11 @@ public partial class MainWindow
         _languageComboBox.SelectedItem = options.First(item => item.Mode == LocalizationService.Mode);
         _languageComboBox.SelectionChanged += LanguageComboBox_SelectionChanged;
 
-        navigation.Children.Add(separator);
-        navigation.Children.Add(label);
-        navigation.Children.Add(_languageComboBox);
+        var componentAnchor = _phpMyAdminNavButton ?? MariaDbNavButton;
+        var insertIndex = navigation.Children.IndexOf(componentAnchor) + 1;
+        navigation.Children.Insert(insertIndex++, separator);
+        navigation.Children.Insert(insertIndex++, label);
+        navigation.Children.Insert(insertIndex, _languageComboBox);
     }
 
     private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -52,17 +55,30 @@ public partial class MainWindow
         try
         {
             LocalizationService.SaveMode(option.Mode);
-            MessageBox.Show(
-                this,
-                LocalizationService.Get("Language_RestartNotice"),
-                LocalizationService.Get("Language_ChangeTitle"),
-                MessageBoxButton.OK,
-                MessageBoxImage.Information);
+            RestartApplication();
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, LocalizationService.Get("Language_ChangeTitle"), MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private static void RestartApplication()
+    {
+        var executable = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
+        {
+            throw new InvalidOperationException("현재 실행 파일 경로를 확인할 수 없어 자동 재시작할 수 없습니다.");
+        }
+
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = AppContext.BaseDirectory,
+            UseShellExecute = true
+        });
+
+        Application.Current.Shutdown();
     }
 
     private sealed record LanguageOption(AppLanguageMode Mode, string DisplayName);
