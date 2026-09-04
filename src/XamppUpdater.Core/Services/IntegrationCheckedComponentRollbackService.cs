@@ -68,6 +68,16 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
             moved = true;
             steps.Add("연동 검증 완료 전까지 롤백 직전 프로그램 폴더를 안전 위치에 보관");
 
+            // Apache logs are intentionally excluded from updater backups. Recreate a temporary
+            // Apache root carrying the current logs so the inner rollback service can preserve
+            // them into the restored Apache tree before it runs httpd -t.
+            if (type == XamppComponentType.Apache)
+            {
+                Directory.CreateDirectory(Path.Combine(componentRoot, "logs"));
+                PreserveApacheLogs(safetyRoot, componentRoot);
+                steps.Add("Apache 검증 전에 logs 디렉터리와 기존 로그 보존 준비 완료");
+            }
+
             var innerResult = await _inner.RollbackAsync(installation, rollbackBackup, cancellationToken);
             steps.AddRange(innerResult.Steps);
             if (!innerResult.Success)
@@ -175,6 +185,12 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
         var source = Path.Combine(safetyRoot, "logs");
         if (!Directory.Exists(source)) return;
         var target = Path.Combine(restoredRoot, "logs");
+        Directory.CreateDirectory(target);
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(source, directory);
+            Directory.CreateDirectory(Path.Combine(target, relative));
+        }
         foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
         {
             var relative = Path.GetRelativePath(source, file);
