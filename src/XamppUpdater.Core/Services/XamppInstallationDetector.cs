@@ -5,12 +5,16 @@ namespace XamppUpdater.Core.Services;
 
 public sealed class XamppInstallationDetector : IXamppInstallationDetector
 {
-    private static readonly IReadOnlyDictionary<XamppComponentType, string> ExecutableRelativePaths =
-        new Dictionary<XamppComponentType, string>
+    private static readonly IReadOnlyDictionary<XamppComponentType, IReadOnlyList<string>> ExecutableRelativePathCandidates =
+        new Dictionary<XamppComponentType, IReadOnlyList<string>>
         {
-            [XamppComponentType.Apache] = Path.Combine("apache", "bin", "httpd.exe"),
-            [XamppComponentType.Php] = Path.Combine("php", "php.exe"),
-            [XamppComponentType.MariaDb] = Path.Combine("mysql", "bin", "mysqld.exe")
+            [XamppComponentType.Apache] = new[] { Path.Combine("apache", "bin", "httpd.exe") },
+            [XamppComponentType.Php] = new[] { Path.Combine("php", "php.exe") },
+            [XamppComponentType.MariaDb] = new[]
+            {
+                Path.Combine("mysql", "bin", "mysqld.exe"),
+                Path.Combine("mysql", "bin", "mariadbd.exe")
+            }
         };
 
     private readonly IComponentVersionDetector _versionDetector;
@@ -58,10 +62,12 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
         var services = EnumerateServices().ToArray();
         var components = new List<XamppComponentInfo>();
 
-        foreach (var pair in ExecutableRelativePaths)
+        foreach (var pair in ExecutableRelativePathCandidates)
         {
-            var executablePath = Path.Combine(normalizedRoot, pair.Value);
-            var installed = File.Exists(executablePath);
+            var executablePath = ResolveInstalledExecutable(normalizedRoot, pair.Value);
+            var installed = executablePath is not null;
+
+            executablePath ??= Path.Combine(normalizedRoot, pair.Value[0]);
             var serviceName = FindServiceName(services, executablePath);
 
             if (!installed)
@@ -84,6 +90,20 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
         return new XamppInstallation(normalizedRoot, discoverySource, components);
     }
 
+    private static string? ResolveInstalledExecutable(string rootPath, IReadOnlyList<string> relativeCandidates)
+    {
+        foreach (var relative in relativeCandidates)
+        {
+            var candidate = Path.Combine(rootPath, relative);
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
     private static void AddCandidate(ISet<string> candidates, string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -94,7 +114,10 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
         try
         {
             var normalized = NormalizePath(path);
-            if (Directory.Exists(normalized) && ExecutableRelativePaths.Values.Any(relative => File.Exists(Path.Combine(normalized, relative))))
+            if (Directory.Exists(normalized) &&
+                ExecutableRelativePathCandidates.Values
+                    .SelectMany(value => value)
+                    .Any(relative => File.Exists(Path.Combine(normalized, relative))))
             {
                 candidates.Add(normalized);
             }
@@ -180,18 +203,22 @@ public sealed class XamppInstallationDetector : IXamppInstallationDetector
 
     private static bool TryInferRootFromExecutable(string executablePath, out XamppComponentType type, out string rootPath)
     {
-        foreach (var pair in ExecutableRelativePaths.Where(pair => pair.Key != XamppComponentType.Php))
-        {
-            var normalizedExecutable = executablePath.Replace('/', '\\');
-            var normalizedRelative = pair.Value.Replace('/', '\\');
-            if (!normalizedExecutable.EndsWith(normalizedRelative, StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+        var normalizedExecutable = executablePath.Replace('/', '\\');
 
-            rootPath = normalizedExecutable[..^normalizedRelative.Length].TrimEnd('\\');
-            type = pair.Key;
-            return !string.IsNullOrWhiteSpace(rootPath);
+        foreach (var pair in ExecutableRelativePathCandidates.Where(pair => pair.Key != XamppComponentType.Php))
+        {
+            foreach (var relative in pair.Value)
+            {
+                var normalizedRelative = relative.Replace('/', '\\');
+                if (!normalizedExecutable.EndsWith(normalizedRelative, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                rootPath = normalizedExecutable[..^normalizedRelative.Length].TrimEnd('\\');
+                type = pair.Key;
+                return !string.IsNullOrWhiteSpace(rootPath);
+            }
         }
 
         type = default;

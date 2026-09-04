@@ -6,9 +6,9 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 
 ## 현재 개발 단계
 
-**Phase 6 — Packaging & Release 최종 검증 단계**입니다.
+핵심 업데이트/복원/배포 기능과 Phase 6 실제 검증을 완료했고, 현재는 **범용 XAMPP 호환성 점검과 안정화 단계**입니다.
 
-핵심 업데이트 엔진과 설정 복원 기능은 구현되어 있으며 Windows 11 테스트 환경에서 다음 실제 업데이트를 확인했습니다.
+Windows 11 테스트 환경에서 다음 실제 업데이트를 확인했습니다.
 
 - Apache 2.4.41 → 2.4.68
 - PHP 7.3.11 → 8.5.10
@@ -16,6 +16,9 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - MariaDB 10.4.8 → 10.4.34
 - MariaDB 10.4.34 → 10.6.28
 - MariaDB 10.6.28 → 12.3.3
+- Apache 설정 snapshot 실제 복원
+- 배포 EXE 자체 업데이트 `v0.1.0` → `v0.1.1`
+- 진단 정보 ZIP 내보내기
 
 릴리스 파이프라인에서는 `v0.1.0`과 `v0.1.1` 공개 GitHub Release를 실제 생성했고, 두 버전 모두 `XAMPP-Updater.exe`와 `XAMPP-Updater.exe.sha256` 게시를 확인했습니다. 현재 GitHub `latest release`는 `v0.1.1`입니다.
 
@@ -24,6 +27,7 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - XAMPP 설치 경로 자동 감지 / 직접 지정
 - Apache / PHP / MariaDB 현재 버전 감지
 - Apache / MariaDB 실제 Windows 서비스명 감지
+- `mysqld.exe`와 `mariadbd.exe` 기반 MariaDB 설치/서비스 감지
 - upstream 및 XAMPP 기준 버전 조회
 - 최신 버전 또는 major.minor 계열별 최신 패치 선택
 - 현재 설치 환경의 PE 아키텍처, PHP TS/NTS/API, Apache PHP 연동 방식 검사
@@ -34,16 +38,16 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - 서비스 중지/재시작과 실제 실행 검증
 - 실패 시 자동 롤백
 - 업데이트 전/후 설정 snapshot, 비교, 선택 복원
+- Apache/PHP/MariaDB 공통 진행 callback과 진행률 UI
 - 영구 작업 로그 및 최근 로그 열기
 - 진단 정보 ZIP 내보내기
 - win-x64 self-contained 단일 EXE publish
-- GitHub Release 기반 앱 자체 업데이트 구현
+- GitHub Release 기반 앱 자체 업데이트
   - 새 EXE와 SHA256 검증 파일 다운로드
   - 다운로드 중 진행률/용량 표시 및 취소
   - SHA256 검증 후 현재 EXE 교체 및 자동 재시작
   - 교체 실패 시 `.update-backup` 복원
-
-남은 Phase 6 최종 검증은 Windows에서 실제 `v0.1.0` 배포 EXE를 실행해 `v0.1.1`로 자체 업데이트하는 왕복 테스트입니다.
+- 실행 파일과 모든 WPF 창에 공통 애플리케이션 아이콘 적용
 
 ## 범위
 
@@ -54,6 +58,8 @@ XAMPP 전체를 재설치하지 않고 설치 경로와 실제 Windows 서비스
 - MariaDB
 
 XAMPP 전체 재설치, 별도 설치된 MariaDB, Node.js, Perl, Tomcat, phpMyAdmin 등은 관리하지 않습니다.
+
+일반적인 Windows XAMPP 디렉터리 구조를 범용 대상으로 하며, 임의로 `apache/php/mysql` 디렉터리를 재배치한 재패키징은 지원 범위 밖입니다. 자세한 기준은 `docs/COMPATIBILITY.md`를 참고하세요.
 
 ## 개발 빌드
 
@@ -108,5 +114,7 @@ GUI의 **진단 정보 내보내기**에서 ZIP 파일을 저장할 수 있습�
 
 ## 문서
 
-- `docs/ROADMAP.md` — 전체 단계와 남은 작업
+- `docs/ROADMAP.md` — 전체 단계와 작업 이력
+- `docs/COMPATIBILITY.md` — 범용 XAMPP 지원 범위와 회귀 테스트 매트릭스
+- `docs/DEFERRED_HARDENING.md` — 차후 검토할 ABI/서명/메타데이터 하드닝
 - `docs/DECISIONS.md` — 확정된 범위/기술 결정
