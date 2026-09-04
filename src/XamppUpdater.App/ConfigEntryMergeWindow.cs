@@ -8,7 +8,7 @@ public sealed class ConfigEntryMergeWindow : Window
 {
     private readonly List<EntryRow> _rows = new();
     private readonly StackPanel _items = new();
-    private readonly TextBlock _summary = new() { Margin = new Thickness(0, 0, 0, 10) };
+    private readonly TextBlock _summary = new() { Margin = new Thickness(0, 0, 0, 10), TextWrapping = TextWrapping.Wrap };
 
     public IReadOnlyDictionary<string, IReadOnlyCollection<string>> Selections => _rows
         .Where(x => x.CheckBox.IsChecked == true && x.Item.CanApply)
@@ -24,8 +24,12 @@ public sealed class ConfigEntryMergeWindow : Window
         MinHeight = 500;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
-        var root = new DockPanel { Margin = new Thickness(12) };
-        DockPanel.SetDock(_summary, Dock.Top);
+        var root = new Grid { Margin = new Thickness(12) };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
         root.Children.Add(_summary);
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
@@ -44,11 +48,17 @@ public sealed class ConfigEntryMergeWindow : Window
         none.Click += (_, _) => { foreach (var row in _rows) row.CheckBox.IsChecked = false; UpdateSummary(); };
         buttons.Children.Add(all);
         buttons.Children.Add(none);
-        DockPanel.SetDock(buttons, Dock.Top);
+        Grid.SetRow(buttons, 1);
         root.Children.Add(buttons);
 
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto };
-        scroll.Content = _items;
+        var scroll = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Margin = new Thickness(0, 0, 0, 8),
+            Content = _items
+        };
+        Grid.SetRow(scroll, 2);
         root.Children.Add(scroll);
 
         string? lastFile = null;
@@ -59,18 +69,21 @@ public sealed class ConfigEntryMergeWindow : Window
                 _items.Children.Add(new TextBlock { Text = item.RelativePath, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 10, 0, 5) });
                 lastFile = item.RelativePath;
             }
+
+            var displayName = ExtendedLocalization.TranslateText(item.DisplayName);
+            var reason = ExtendedLocalization.TranslateText(item.Reason);
             var check = new CheckBox
             {
                 IsChecked = item.CanApply,
                 IsEnabled = item.CanApply,
-                Margin = new Thickness(8, 3, 0, 3),
+                Margin = new Thickness(8, 3, 8, 3),
                 Content = item.CanApply
                     ? LocalizationCatalog.Text(
-                        $"{item.DisplayName}    현재: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}",
-                        $"{item.DisplayName}    Current: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}")
+                        $"{displayName}    현재: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}",
+                        $"{displayName}    Current: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}")
                     : LocalizationCatalog.Text(
-                        $"[수동 확인] {item.DisplayName}    {item.Reason}",
-                        $"[Manual review] {item.DisplayName}    {LocalizationCatalog.TranslateUserText(item.Reason)}")
+                        $"[수동 확인] {displayName}    {reason}",
+                        $"[Manual review] {displayName}    {reason}")
             };
             check.Checked += (_, _) => UpdateSummary();
             check.Unchecked += (_, _) => UpdateSummary();
@@ -78,7 +91,12 @@ public sealed class ConfigEntryMergeWindow : Window
             _items.Children.Add(check);
         }
 
-        var bottom = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        var bottom = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(0, 8, 0, 0)
+        };
         var apply = new Button
         {
             Content = LocalizationCatalog.Text("선택 항목 적용", "Apply selected entries"),
@@ -109,7 +127,7 @@ public sealed class ConfigEntryMergeWindow : Window
         };
         bottom.Children.Add(apply);
         bottom.Children.Add(cancel);
-        DockPanel.SetDock(bottom, Dock.Bottom);
+        Grid.SetRow(bottom, 3);
         root.Children.Add(bottom);
 
         Content = root;
