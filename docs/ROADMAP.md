@@ -2,10 +2,16 @@
 
 ## 목표
 
-Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB**, 그리고 XAMPP에 포함된 경우 **phpMyAdmin**을 안전하게 관리한다.
+Windows 11의 기존 XAMPP 설치에서 **Apache / PHP / MariaDB**, 그리고 XAMPP에 포함된 경우 **phpMyAdmin**을 안전하게 관리한다.
 
 핵심 우선순위는 **자동화된 안전한 업데이트 → 실패 시 자동 롤백 → 업데이트 후 문제 발생 시 설정 복원**이다.
 XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리는 범위 밖이다.
+
+## 1.0 상태
+
+핵심 기능, 실제 업데이트/롤백 검증, 설정 복원, 자체 업데이트, phpMyAdmin 관리, 한국어/영어 UI 기반까지 완료했다.
+
+1.0 이후 남는 작업은 새 핵심 기능이 아니라 일반적인 버그 수정, 추가 환경 회귀 테스트, 번역/레이아웃 보정, 선택적 보안 하드닝으로 취급한다.
 
 ## Phase 1 — Foundation & Local Detection
 
@@ -31,11 +37,11 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] latest 및 major.minor 계열별 최신 패치 선택
 - [x] major/minor 변경 대상 선택
 - [x] PHP 설정/확장/SAPI 마이그레이션 계획
-- [x] MariaDB major 업그레이드 경로 모델링
+- [x] MariaDB major 업그레이드 경로 모델링 및 실제 검증
 
 ## Phase 3 — Backup, Compare & Preflight
 
-핵심 기능 완료.
+완료.
 
 - [x] 구성요소별 준비 점검
 - [x] 프로세스/서비스 상태 확인
@@ -48,18 +54,17 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] ZIP 내부 PE 아키텍처/필수 실행 파일 검사
 - [x] 기존/신규 파일 및 설정 diff
 - [x] PHP 외부 extension PE/TS-NTS/loader 판정
-- [x] 정식 롤백 백업과 롤백 직전 안전 백업을 manifest에서 구분
+- [x] 정식 롤백 백업과 롤백 직전 Safety 백업 구분
 - [x] 현재 설치 버전에 직접 연결되는 정상 롤백 백업만 카탈로그에 노출
 - [x] 롤백 후보 manifest/파일 크기/SHA256 검증 및 MariaDB 논리 백업 필수화
-- [x] 안전 백업 7일/구성요소별 최근 3개 보존 정책
+- [x] Safety 백업 7일/구성요소별 최근 3개 보존 정책
 - [x] schema 1/2 기존 백업 호환 유지
 
-추가 PGP 검증과 정적 ABI/메타데이터 강화는 현재 동작을 바꾸지 않고 `DEFERRED_HARDENING.md`의 후속 후보로 이동했다.
-백업/롤백 카탈로그 세부 정책은 `BACKUP_ROLLBACK_POLICY.md`에 정리한다.
+세부 정책: `docs/BACKUP_ROLLBACK_POLICY.md`
 
 ## Phase 4 — Assisted Update Engine
 
-핵심 업데이트 엔진과 실제 환경 검증 완료.
+완료 및 실제 환경 검증 완료.
 
 ### PHP
 
@@ -93,7 +98,7 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] my.ini/my.cnf 보존
 - [x] 서비스 기동 후 `mariadb-upgrade` / `mysql_upgrade`
 - [x] 일회성 인증 option 파일
-- [x] 동일 계열 패치 및 직접 major 업그레이드
+- [x] 동일 계열 패치 및 검증된 직접 major 업그레이드
 - [x] MariaDB 10.4.8 → 10.4.34
 - [x] MariaDB 10.4.34 → 10.6.28
 - [x] MariaDB 10.6.28 → 12.3.3
@@ -107,9 +112,14 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] Windows 서비스 pending 상태 안전 처리
 - [x] Apache/PHP/MariaDB 진행 callback 공통화
   - 공통 stage ID: BackupVerify / BeforeSnapshot / Execute / AfterSnapshot / Rollback / Failed / Completed
-  - 기존 executor 순서/롤백 로직은 변경하지 않고 보고 계층만 통일
-- [x] Apache ↔ PHP 롤백 후 연동 검증 및 실패 시 롤백 직전 상태 자동 원복
+  - 각 executor의 고유 교체/롤백 로직은 유지하고 보고 계층만 통일
+- [x] Apache ↔ PHP 변경 후 공통 연동 검증
+- [x] Apache/PHP 롤백 후 현재 상대 구성요소와 연동 실패 시 방금 변경한 쪽만 자동 원복
+- [x] Apache 롤백 시 현재 PHP에 맞춰 SAPI 설정 재보정
+- [x] Apache 롤백에서 백업 제외된 logs 디렉터리 구조 보존
 - [x] 실제 환경에서 Apache → PHP → MariaDB → phpMyAdmin 업데이트 후 MariaDB → Apache → PHP → phpMyAdmin 순서 롤백 검증
+
+세부 정책: `docs/APACHE_PHP_INTEGRATION.md`
 
 ## Phase 5 — Config Compare / Restore
 
@@ -132,24 +142,16 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] win-x64 .NET 8 self-contained single-file EXE
 - [x] GitHub Actions restore/build/smoke/publish
 - [x] GitHub Release EXE + SHA256 게시
-- [x] 공개 `v0.1.0` Release
-- [x] 공개 `v0.1.1` Release
-- [x] 공개 `v0.1.2` Release
-- [x] 앱 자체 업데이트
-  - GitHub latest 조회
-  - 실제 다운로드 진행률/용량
-  - 다운로드 중 취소
-  - SHA256 검증
-  - 검증 후 취소 차단
-  - 5초 자동/즉시 재시작
-  - EXE 교체 및 `.update-backup` 실패 복원
-- [x] 실제 배포 EXE `v0.1.0` → `v0.1.1` 자체 업데이트 및 재실행 확인
+- [x] GitHub Release 기반 앱 자체 업데이트
+- [x] 실제 EXE 교체/재시작 검증
+- [x] 실패 시 `.update-backup` 복원
 - [x] 진단 정보 ZIP 내보내기
-- [x] 공통 애플리케이션 아이콘을 EXE와 WPF 창에 적용
+- [x] 공통 애플리케이션 아이콘
+- [x] 1.0.0 릴리스 준비
 
 ## Phase 7 — Optional phpMyAdmin & Localization
 
-진행 중.
+완료.
 
 ### phpMyAdmin
 
@@ -167,46 +169,50 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] 폴더 교체 및 실패 시 자동 원복
 - [x] 관리자 권한 재실행 후 자동 재개
 - [x] 공통 stage ID 기반 진행률/실제 다운로드 용량 표시
-- [x] 기존 전체 Build / Smoke tests / self-contained publish / EXE 검증 통과
-- [x] 실제 XAMPP 설치에서 phpMyAdmin 업데이트 및 롤백 검증
-- [x] 업데이트 후 실제 브라우저 로그인/DB 조회 확인
+- [x] 업데이트 과정에서 생성된 백업 감지 및 롤백
+- [x] 실제 XAMPP 설치에서 업데이트 및 롤백 검증
+- [x] 업데이트 후 브라우저 로그인/DB 조회 확인
 
 ### 한국어 / 영어 다국어화
 
-- [x] 리소스 기반 문자열 계층 추가
+- [x] 리소스 기반 문자열 계층
 - [x] 시스템 기본값 / 한국어 / English 모드
 - [x] Windows UI 언어 기반 시스템 기본 선택
 - [x] `%LOCALAPPDATA%\XAMPP-Updater\settings.json`에 사용자 선택 저장
-- [x] 언어 선택 UI 추가
-- [x] 기존 XAML 및 동적 WPF Text/Content/Header의 전역 현지화 기반
-- [x] 기존 `MessageBox.Show` 호출을 업데이트 로직 수정 없이 현지화하는 호환 래퍼
+- [x] 언어 선택 UI
+- [x] 언어 변경 시 자동 재시작
+- [x] XAML 및 동적 WPF Text/Content/Header 현지화 계층
+- [x] 자체 업데이트 UI/진행/대화상자 현지화
+- [x] 영어 모드 MessageBox 버튼 현지화
+- [x] 버전 셀렉터/동적 계획/온라인 상태/Advanced information 현지화 보강
+- [x] 설정 이력/비교/복원/병합/무결성 검사 UI 현지화 보강
 - [x] 내부 stage ID는 영어 고정 유지
-- [x] Build / Smoke tests / self-contained publish / EXE 검증 통과
-- [ ] 실제 Windows 실행에서 한국어/영어 화면 육안 검증
-- [ ] 영어 모드에서 긴 문구/버튼 폭/줄바꿈 회귀 검증
-- [ ] 번역 누락 문구가 발견될 때 리소스/번역 사전 보강
+- [x] 실제 Windows에서 반복 육안 검증 및 잔여 혼합 문구 수정
 
-## 현재 안정화 — XAMPP 범용성
+이후 번역 누락이나 긴 문자열 레이아웃 문제는 일반 버그 수정으로 처리한다.
 
-정적 코드/구조 검토를 완료하고 지원 범위를 문서화했다.
+## XAMPP 범용성 안정화
+
+현재 지원 범위를 문서화하고 기본 회귀 기준을 확정했다.
 
 - [x] XAMPP 루트를 `C:\xampp`로 고정하지 않음
 - [x] 임의 드라이브 및 수동 지정
 - [x] 서비스명을 고정하지 않고 ImagePath 기준으로 연결
 - [x] 여러 XAMPP 후보 감지
 - [x] `mysqld.exe` / `mariadbd.exe` 감지
-- [x] 공백/비 ASCII/보호 경로에 대한 설계 검토
+- [x] 공백/비 ASCII/보호 경로 설계 검토
 - [x] 지원/조건부 지원/범위 밖 기준 문서화
 - [x] 실제 환경 회귀 테스트 매트릭스 정의
-- [ ] 추가 VM/사용자 환경이 확보될 때 경로·서비스·설정 조합별 회귀 테스트 확대
+
+추가 VM/사용자 환경이 확보될 때의 회귀 테스트 확대는 1.0 이후 유지보수 작업으로 처리한다.
 
 상세 기준: `docs/COMPATIBILITY.md`
 
-## 차후 후보 — 현재는 구현하지 않음
+## 1.0 이후 선택적 후보
 
-아래는 현재 안정 동작을 건드리지 않고 후속 후보로만 보존한다.
+현재 안정 동작을 건드리지 않고 후속 후보로만 보존한다.
 
-- Apache module / PHP extension ABI 정적 메타데이터 추가
+- Apache module / PHP extension ABI 정적 메타데이터 강화
 - 공급처가 제공하는 경우 PGP/GPG 서명 검증
 - 공식 manifest/API 기반 공급처 메타데이터 신뢰도 강화
 
