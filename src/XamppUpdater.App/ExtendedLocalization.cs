@@ -77,7 +77,6 @@ internal static class ExtendedLocalization
         ("설치 버전 ", "Installed version "),
         ("온라인 확인 완료:", "Online check completed:"),
         ("계열별 선택 버전", "series-specific selectable versions"),
-        ("개", " items"),
         ("는 같은 Apache 2.4 계열입니다.", " is in the same Apache 2.4 series."),
         ("같은 PHP 메이저 계열입니다.", "This is in the same PHP major series."),
         ("는 메이저 변경입니다.", " is a major-version change."),
@@ -125,7 +124,7 @@ internal static class ExtendedLocalization
             return text ?? string.Empty;
 
         var structured = TranslateStructuredRuntimeText(text);
-        if (!ReferenceEquals(structured, text) && !string.Equals(structured, text, StringComparison.Ordinal))
+        if (!string.Equals(structured, text, StringComparison.Ordinal))
             return structured;
 
         var translated = UserMessageLocalization.PreTranslate(text);
@@ -168,7 +167,7 @@ internal static class ExtendedLocalization
 
         var phpMyAdminPlan = Regex.Match(
             text,
-            @"^phpMyAdmin (?<current>[^ ]+) → (?<target>[^. ]+)\. 기존 config\.inc\.php와 \.htaccess, upload/save 폴더를 보존하고 전체 롤백 백업 후 폴더를 교체합니다\.$",
+            @"^phpMyAdmin (?<current>\d+(?:\.\d+)+) → (?<target>\d+(?:\.\d+)+)\. 기존 config\.inc\.php와 \.htaccess, upload/save 폴더를 보존하고 전체 롤백 백업 후 폴더를 교체합니다\.$",
             RegexOptions.CultureInvariant);
         if (phpMyAdminPlan.Success)
             return $"phpMyAdmin {phpMyAdminPlan.Groups["current"].Value} → {phpMyAdminPlan.Groups["target"].Value}. The existing config.inc.php, .htaccess, and upload/save folders will be preserved, then the folder will be replaced after a full rollback backup.";
