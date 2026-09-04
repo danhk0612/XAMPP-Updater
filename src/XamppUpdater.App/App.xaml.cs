@@ -50,8 +50,9 @@ public partial class App : Application
             if (window is MainWindow mainWindow)
             {
                 mainWindow.InitializePhpMyAdminUi();
-                mainWindow.InitializePhpMyAdminBackupUi();
+                mainWindow.InitializePhpMyAdminRollbackUi();
                 mainWindow.InitializeLocalizationUi();
+                mainWindow.InitializeRuntimeLocalizationUi();
                 mainWindow.InitializeConfigHistoryUi();
 
                 LocalizationService.ApplyToTree(window);
@@ -72,6 +73,7 @@ public partial class App : Application
                     await mainWindow.ResumeStartupUpdateAsync();
                 }
 
+                await mainWindow.ResumeStartupPhpMyAdminRollbackAsync();
                 await mainWindow.ResumeStartupRollbackAsync();
             }
         });
@@ -82,6 +84,7 @@ public partial class App : Application
         if (sender is FrameworkElement element)
         {
             LocalizationService.ApplyToElement(element);
+            LocalizationCatalog.ApplyToElement(element);
         }
     }
 
@@ -90,6 +93,7 @@ public partial class App : Application
         if (sender is Window window)
         {
             LocalizationService.ApplyToTree(window);
+            LocalizationCatalog.ApplyToElement(window);
         }
     }
 
