@@ -71,6 +71,8 @@ public partial class MainWindow
 
     private void RefreshMariaDbExecuteEnabled()
     {
+        RefreshPrimaryUpdateButtons();
+
         if (_mariaDbExecuteButton is null || _mariaDbUpdateRunning || _mariaDbBackupRunning || _lastInstallation is null)
         {
             if (_mariaDbExecuteButton is not null) _mariaDbExecuteButton.IsEnabled = false;
