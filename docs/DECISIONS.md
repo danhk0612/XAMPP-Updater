@@ -1,138 +1,182 @@
 # Decisions
 
-프로젝트 진행 중 확정된 기술/범위 결정을 기록한다.
+1.0 기준으로 확정된 프로젝트 범위와 기술 결정을 기록한다.
 
-## D-001 대상 구성요소 제한
+## D-001 관리 대상
 
-관리 대상은 Apache, PHP, MariaDB 세 가지로 제한한다. XAMPP 전체 업그레이드 도구로 만들지 않는다.
+기본 관리 대상은 선택한 XAMPP 루트의 Apache, PHP, MariaDB다. `phpMyAdmin` 폴더가 실제 존재하는 경우 phpMyAdmin을 선택적으로 추가 관리한다.
 
-## D-002 Windows 11 우선
+XAMPP 전체 업그레이드 도구로 확장하지 않으며 Node.js, Perl, Tomcat 등은 범위 밖이다.
 
-초기 지원 OS는 Windows 11이다. GUI는 .NET 8 WPF로 구현한다.
+## D-002 Windows 11 / .NET 8 WPF
+
+주 지원 OS는 Windows 11이며 GUI는 .NET 8 WPF로 구현한다. 배포는 win-x64 self-contained single-file EXE를 기본으로 한다.
 
 ## D-003 설치 경로는 자동 감지와 직접 지정 모두 지원
 
 자동 감지는 다음 신호를 조합한다.
 
-1. `C:\xampp`
+1. 일반적인 `C:\xampp`
 2. 고정 드라이브 루트의 `\xampp`
 3. XAMPP 제거 정보의 `InstallLocation`
 4. Apache/MariaDB Windows 서비스의 `ImagePath`
 
-전체 드라이브 재귀 검색은 Phase 1에서 하지 않는다.
+전체 드라이브 재귀 검색은 기본 동작으로 사용하지 않는다.
 
 ## D-004 서비스명 고정 금지
 
-`Apache2.4`, `mysql` 같은 기본 이름을 전제로 하지 않는다. Windows 서비스 레지스트리의 실제 `ImagePath`가 선택한 XAMPP 설치의 실행 파일과 일치하는지 확인해 서비스명을 찾는다.
+`Apache2.4`, `mysql` 같은 기본 서비스명을 전제로 하지 않는다. 실제 Windows 서비스의 `ImagePath`가 선택한 XAMPP 설치의 실행 파일과 연결되는지 확인한다.
 
-## D-005 XAMPP의 `mysql` 디렉터리
+## D-005 MariaDB 실행 파일 이름
 
-XAMPP에서 MariaDB 서버가 `mysql\bin\mysqld.exe` 경로에 배치되는 구조를 그대로 감지한다. 단순히 경로만 보고 MariaDB라고 확정하지 않고 `mysqld.exe --version` 출력에 MariaDB 식별 문자열이 있는지도 표시한다.
+XAMPP의 `mysql` 디렉터리에서 `mysqld.exe`와 `mariadbd.exe`를 모두 감지한다. 경로만으로 제품을 확정하지 않고 실행 파일 버전 정보도 사용한다.
 
-## D-006 Phase 1은 읽기 전용
+## D-006 읽기/변경 계층 분리
 
-Phase 1에서는 설치 감지와 버전 확인만 한다. 서비스 중지/시작, 파일 수정/삭제/교체, 설정 변경은 하지 않는다.
+설치 감지, 온라인 버전 조회, 호환성 프로파일링은 가능한 한 읽기 전용으로 수행한다. 서비스 제어와 파일 교체는 실제 업데이트/롤백 단계에서만 수행한다.
 
-## D-007 업데이트 전에 호환성 계층을 먼저 만든다
+## D-007 최신 버전과 적용 가능 버전을 분리
 
-Apache/PHP/MariaDB의 upstream Windows 패키지는 XAMPP 번들과 구조 및 빌드 조건이 다를 수 있다. 따라서 최신 버전을 찾았다는 이유만으로 자동 교체하지 않고, Phase 2에서 공급원/아키텍처/런타임/패키지 구조 호환성을 정의한 뒤 업데이트 엔진을 구현한다.
+`upstream latest`, `XAMPP official baseline`, 실제 Windows 후보 패키지와 사용자가 선택할 수 있는 계열별 버전을 서로 구분한다. 최신 버전이라는 이유만으로 바로 교체하지 않는다.
 
-## D-008 최신 버전과 XAMPP 적용 가능 버전을 분리
+## D-008 현재 설치 환경을 먼저 프로파일링
 
-`upstream 최신 버전`과 `XAMPP 공식 번들 기준 버전`을 서로 다른 값으로 관리한다. upstream에 새 버전이 있다는 이유만으로 업데이트 가능 상태로 표시하지 않는다.
+후보 패키지 적용 전 다음을 실제 설치에서 확인한다.
 
-현재 메타데이터 공급원은 다음을 우선한다.
+- Apache/PHP/MariaDB PE 아키텍처
+- PHP Thread Safety, compiler, PHP Extension Build/API
+- Apache의 `LoadModule php*_module ...php*apache2_4.dll` 연동
+- MariaDB 현재 release series
 
-- Apache 최신 릴리스: Apache HTTP Server 공식 다운로드 페이지
-- PHP 최신 Windows 릴리스: PHP 공식 Windows 다운로드 페이지
-- MariaDB 최신 Community Server: MariaDB 공식 다운로드 페이지
-- XAMPP 공식 번들 기준: Apache Friends 공식 Windows 다운로드 페이지
+파일명이나 XAMPP 기본값만으로 호환성을 추정하지 않는다.
 
-공급원 HTML 구조가 변경되어 파싱에 실패하면 해당 구성요소를 `확인 실패`로 처리하며 임의의 버전을 추정하지 않는다.
+## D-009 Apache Windows 바이너리
 
-## D-009 Apache Windows 바이너리는 별도 공급원 검증 필요
+Apache Software Foundation은 Windows용 httpd 바이너리를 직접 제공하지 않으므로 실제 Windows 패키지는 별도 공급원과 빌드 조건을 검증해야 한다. ASF 버전 정보와 실제 Windows 패키지의 compiler/module ABI/VC++ 조건을 구분한다.
 
-Apache Software Foundation은 Windows용 httpd 바이너리를 직접 릴리스하지 않는다. 현재 공식 문서에서 Apache Lounge 등 제3자 Windows 바이너리 공급원을 안내한다.
+## D-010 PHP의 일반 XAMPP 후보
 
-따라서 Apache 최신 버전 메타데이터는 ASF에서 확인하되, 실제 업데이트 ZIP의 공급원/컴파일러/모듈 ABI/VC++ 런타임 호환성은 별도의 패키지 호환성 판정을 통과해야 한다.
+Apache module 방식 XAMPP에서는 x64 Thread Safe PHP를 기본적인 후보로 보되, 실제 현재 설치의 Apache 연동 방식과 DLL 정보를 최종 판단 기준으로 사용한다.
 
-## D-010 PHP의 XAMPP 기본 후보는 x64 Thread Safe
+## D-011 MariaDB major 업그레이드
 
-Apache 모듈 방식으로 PHP를 사용하는 일반적인 XAMPP 구성에서는 Windows x64 Thread Safe 빌드를 기본 후보로 본다. PHP 공식 문서도 Apache HTTP Server에서 사용하는 경우 Thread Safe 빌드를 안내한다.
+MariaDB major 변경을 단순 파일 덮어쓰기로 처리하지 않는다. 대신 전체 논리+물리 백업, 서비스 중지, 대상 바이너리 적용, data 사본, `mariadb-upgrade`/`mysql_upgrade`, 서버 상태 검증을 포함한 검증된 경로를 사용한다.
 
-단, 기존 `httpd.conf`/`httpd-xampp.conf`의 PHP 연동 방식과 확장 DLL ABI를 실제로 확인한 뒤 최종 판정한다.
+직접 major 업그레이드는 사전 검증과 자동 원복 조건을 충족하면 허용한다. 실제로 10.4.34 → 10.6.28 → 12.3.3 경로를 검증했다.
 
-## D-011 MariaDB 메이저 버전 직접 점프 금지
+## D-012 위험한 변경은 Assisted workflow
 
-MariaDB는 데이터 파일과 시스템 테이블의 업그레이드 절차가 있으므로 최신 Community Server 메이저 버전을 단순 파일 교체 대상으로 취급하지 않는다.
+PHP major 변경이나 MariaDB release-series 변경처럼 단순 교체가 위험한 경우에도 무조건 기능을 막지 않는다.
 
-현재 버전 → 목표 버전의 지원되는 업그레이드 경로, 백업, `mariadb-upgrade` 계열 절차를 정의하기 전에는 무인 자동 업데이트 대상으로 표시하지 않는다.
+- 백업
+- 설정/파일/ABI 비교
+- 자동 변환 가능한 항목 처리
+- 필요한 경우 사용자 확인
+- 실행 검증
+- 실패 시 자동 원복
 
-## D-012 현재 설치 환경을 먼저 프로파일링
+순서의 보조 업데이트 흐름을 제공한다.
 
-후보 패키지와 비교하기 전에 현재 XAMPP 설치의 실제 실행 파일과 설정을 읽어 호환성 프로파일을 만든다.
+## D-013 후보 상태는 자동화 수준
 
-- Apache/PHP/MariaDB 실행 파일의 PE 아키텍처 확인
-- `php.exe -i`에서 Thread Safety, compiler, PHP Extension Build, PHP API 확인
-- `apache\conf` 아래의 실제 `LoadModule php*_module ...php*apache2_4.dll` 설정 확인
-- MariaDB 현재 major.minor 계열 확인
+후보 상태는 다음 의미로 사용한다.
 
-파일 이름이나 XAMPP 기본값만으로 x64/Thread Safe/Apache module 여부를 추정하지 않는다.
+- `Automatic`: 사용자 개입 없이 필요한 검증과 적용 가능
+- `Assisted`: 일부 확인이 필요하지만 앱이 전체 흐름을 수행
+- `ManualReview`: 적용 전 사용자의 명시적 검토 필요
+- `Unavailable`: 현재 조건에서 사용할 후보를 확보하지 못함
 
-## D-013 메이저 변경은 무인 자동 적용 대신 보조 업데이트
+단순히 버전이 오래됐거나 major가 다르다는 이유만으로 `Unavailable`로 만들지 않는다.
 
-PHP 메이저 변경이나 MariaDB major.minor 계열 변경처럼 단순 덮어쓰기가 위험한 경우에도 업데이트 기능 자체를 막지 않는다.
+## D-014 목표 버전 선택
 
-- 자동으로 백업한다.
-- 기존/신규 설정과 파일 구조를 비교한다.
-- 자동 변환 가능한 항목은 변환한다.
-- 충돌/삭제/ABI 불일치 항목만 사용자에게 보여 선택을 받는다.
-- 검증 및 사전 점검을 통과한 뒤 나머지 교체/재시작/후처리는 앱이 수행한다.
+모든 패치 릴리스를 나열하지 않고 major.minor 계열별 최신 패치를 중심으로 제공한다. 최신/upstream/XAMPP 기준과 공식 archive 후보가 겹치면 하나의 버전 선택지로 합친다.
 
-즉 `무인 자동 불가`와 `업데이트 불가`를 구분한다.
+## D-015 상대 구성요소 자동 연쇄 변경 금지
 
-## D-014 Phase 2도 시스템 변경 금지
+한 구성요소 업데이트/롤백 때문에 다른 구성요소의 버전을 자동으로 업데이트하거나 롤백하지 않는다.
 
-Phase 2는 온라인 메타데이터 조회와 로컬 파일/설정 읽기만 수행한다. 서비스 제어, 다운로드된 패키지 설치, 파일 교체, 설정 수정은 Phase 3/4 이전에는 실행하지 않는다.
+지원 버전 차이만 있는 경우에는 호환성 정보 또는 경고만 제공하며 상대 구성요소를 연쇄 변경하지 않는다.
 
-## D-015 후보 상태는 자동화 수준을 나타낸다
+## D-016 Apache ↔ PHP는 실제 연동 검증
 
-후보 패키지 상태는 위험 여부를 이유로 단순 `차단`하지 않고 다음 네 단계로 관리한다.
+Apache와 PHP는 일반적인 XAMPP에서 직접 module/SAPI로 연동되므로 예외적으로 실제 런타임 연동을 검증한다.
 
-- `Automatic`: 필요한 검증과 마이그레이션이 모두 자동화되어 사용자 개입 없이 실행 가능
-- `Assisted`: 패키지 확인, 설정 diff, ABI 확인, 업그레이드 절차 등 일부 확인이 필요하지만 앱이 작업 흐름을 안내하고 나머지를 자동 수행
-- `ManualReview`: 계열 변경 등으로 사용자가 변경 내용을 검토/승인해야 하지만 앱에서 비교·백업·적용 절차를 제공
-- `Unavailable`: 현재 공급원이나 아키텍처에서 사용할 후보 패키지를 찾지 못함
+Apache 또는 PHP를 변경한 뒤:
 
-해시가 없다는 이유만으로 업데이트 경로를 없애지 않는다. 공식 공급원에서 패키지를 확보한 뒤 앱이 내부 메타데이터와 현재 환경을 다시 검증해 `Assisted` 흐름으로 진행한다.
+- 현재 PHP에 맞는 `LoadFile`/`LoadModule`/`PHPIniDir` 보정
+- `php -v`
+- `php -m`
+- Apache module DLL loader 확인
+- `httpd -t`
+- 작업 전 Apache가 실행 중이었다면 최종 서비스 `RUNNING`
 
-## D-016 차단은 최후 수단
+을 확인한다.
 
-업데이트 경로는 가능한 한 다음 우선순위로 제공한다.
+실패하면 상대 구성요소는 건드리지 않고 방금 변경한 구성요소만 직전 상태로 자동 원복한다.
 
-1. 완전 자동 업데이트
-2. 자동 백업/검증 + 일부 사용자 확인이 있는 보조 업데이트
-3. 설정/파일 diff와 단계별 안내를 제공하는 검토 후 업데이트
-4. 후보를 찾을 수 없거나 현재 환경을 식별할 수 없는 경우에만 후보 없음
+## D-017 전역 롤백 순서 강제 없음
 
-단순히 오래된 버전, 메이저 변경, 해시 부족, ABI 차이 가능성이 있다는 이유만으로 기능을 종료하지 않는다. 앱이 확인 가능한 범위를 최대화하고 사용자가 결정해야 하는 부분만 최소화한다.
+Apache/PHP/MariaDB/phpMyAdmin 사이에 업데이트 역순으로만 롤백해야 한다는 전역 제한을 두지 않는다.
 
-## D-017 목표 버전 선택은 계열별 최신으로 축약
+실제 환경에서 Apache → PHP → MariaDB → phpMyAdmin 업데이트 후 MariaDB → Apache → PHP → phpMyAdmin 순서 롤백을 검증했다.
 
-사용자가 선택할 수 있는 목표 버전은 현재 major/minor 계열로 제한하지 않는다. 최신 버전까지 선택할 수 있지만, 모든 패치 릴리스를 나열하지 않고 **각 major.minor 계열의 최신 패치 1개**만 선택지로 제공한다.
+MariaDB는 다른 구성요소 때문이 아니라 자신의 데이터/시스템 테이블 변경 때문에 자체 롤백 검증을 더 엄격하게 유지한다.
 
-예:
+## D-018 롤백 백업과 Safety 백업 구분
 
-- PHP: 최신, 8.5.x 최신, 8.4.x 최신, 8.3.x 최신 ...
-- MariaDB: 최신, 12.3.x 최신, 11.8.x 최신, 11.4.x 최신 ...
-- Apache: 사용 가능한 각 2.x 계열의 최신 패치
+업데이트 전 생성되는 정식 백업은 사용자 롤백 지점이다. 롤백 직전 자동 생성되는 현재 상태 보호용 백업은 `Safety`로 구분하고 일반 롤백 후보에 노출하지 않는다.
 
-현재 설치 버전과 XAMPP 공식 기준 버전은 비교를 위해 별도 선택지로 유지한다. 동일 버전이 여러 출처에서 겹치면 한 항목으로 합친다.
+현재 정책은 Safety 백업을 7일, 구성요소별 최근 3개 기준으로 정리한다.
 
-버전 목록 공급원은 다음과 같이 분리한다.
+## D-019 롤백 후보는 현재 버전과 연결된 검증된 백업만
 
-- Apache: ASF 공식 archive에서 릴리스 목록을 확보하고 major.minor별 최신 패치를 남긴다.
-- PHP: PHP Windows 공식 archive에서 현재 아키텍처와 Apache 연동 방식에 맞는 TS/NTS ZIP을 찾고 major.minor별 최신 패치를 남긴다.
-- MariaDB: MariaDB 공식 DLM에서 현재 계열 이상 major.minor별 최신 패치를 수집한다. EOL 계열은 선택 가능하되 명시적으로 표시한다.
+롤백 카탈로그는 다음을 확인한다.
 
-별도의 사용자 ZIP 직접 지정 UI는 제공하지 않는다. 선택한 버전의 패키지 탐색과 검증은 앱의 업데이트 준비 단계에서 처리한다.
+- 구성요소와 XAMPP 루트 일치
+- 현재 버전과 백업 `TargetVersion` 연결
+- 정상적인 이전 버전 방향
+- manifest 경로 및 파일 존재
+- 크기/SHA256
+- MariaDB 논리 백업 존재
+
+실행 직전에도 다시 무결성을 확인한다. schema 1/2 기존 백업 호환은 유지한다.
+
+## D-020 phpMyAdmin은 독립 폴더 교체 방식
+
+phpMyAdmin은 Apache/PHP/MariaDB executor에 억지로 통합하지 않는다.
+
+- XAMPP 루트에 폴더가 있을 때만 UI 제공
+- 공식 latest metadata / ZIP / SHA256 사용
+- `config.inc.php`, `.htaccess`, `upload`, `save` 보존
+- 전체 폴더 rollback backup
+- staging/버전/PHP syntax 검증
+- 실패 시 폴더 원복
+
+실제 업데이트/롤백/브라우저 로그인/DB 조회까지 검증했다.
+
+## D-021 설정 이력은 프로그램 데이터로 별도 관리
+
+업데이트 전/후 및 수동 설정 snapshot은 프로그램 데이터 영역에 저장한다. 실제 XAMPP 설정과 별개로 SHA256/크기 manifest, 비교, 무결성 검사, 전체/파일/안전한 항목 단위 복원을 제공한다.
+
+복원 직전에는 Safety snapshot을 생성하고 검증 실패 시 자동 원복한다.
+
+## D-022 다국어 정책
+
+UI는 System / Korean / English를 지원한다. 사용자 선택은 `%LOCALAPPDATA%\XAMPP-Updater\settings.json`에 저장하고 언어 변경 시 자동 재시작한다.
+
+내부 stage ID와 프로그램 내부 식별자는 영어 고정으로 유지하고 사용자에게 표시되는 UI/대화상자/상태 문구만 현지화한다.
+
+## D-023 자체 업데이트
+
+GitHub Releases의 최신 버전을 확인하고 `XAMPP-Updater.exe`와 SHA256 파일을 내려받아 검증한 뒤 현재 EXE를 교체한다. 검증 이후에는 취소를 제한하고 교체 실패 시 `.update-backup`을 복원한다.
+
+## D-024 1.0 이후 하드닝
+
+다음은 1.0 필수 범위가 아니라 선택적 후속 하드닝으로 유지한다.
+
+- Apache module / PHP extension ABI 정적 메타데이터 강화
+- 공급처 PGP/GPG 서명 검증
+- 공식 manifest/API 기반 공급처 메타데이터 신뢰도 강화
+
+자세한 착수 조건은 `docs/DEFERRED_HARDENING.md`에 둔다.
