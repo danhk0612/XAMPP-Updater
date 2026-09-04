@@ -169,7 +169,7 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] 공통 stage ID 기반 진행률/실제 다운로드 용량 표시
 - [x] 기존 전체 Build / Smoke tests / self-contained publish / EXE 검증 통과
 - [x] 실제 XAMPP 설치에서 phpMyAdmin 업데이트 및 롤백 검증
-- [ ] 업데이트 후 실제 브라우저 로그인/DB 조회 확인
+- [x] 업데이트 후 실제 브라우저 로그인/DB 조회 확인
 
 ### 한국어 / 영어 다국어화
 
