@@ -34,7 +34,7 @@ internal static class PhpIniOwnedPathSmoke
             var ini =
                 $"extension_dir=\"{Path.Combine(configuredRoot, "ext")}\"{Environment.NewLine}" +
                 $"curl.cainfo=\"{Path.Combine(configuredRoot, "certs", "cacert.pem")}\"{Environment.NewLine}" +
-                $"include_path=\".;{Path.Combine(configuredRoot, "PEAR")};{externalRoot}\"{Environment.NewLine}" +
+                $"include_path=\".;{Path.Combine(configuredRoot, "PEAR")};{Path.Combine(configuredRoot, "ext")};{externalRoot}\"{Environment.NewLine}" +
                 $"session.save_path=\"5;0600;{Path.Combine(configuredRoot, "sessions")}\"{Environment.NewLine}" +
                 $"error_log=\"{Path.Combine(configuredRoot, "logs", "php_error.log")}\"{Environment.NewLine}" +
                 $"openssl.cafile=\"{externalCert}\"";
@@ -57,7 +57,7 @@ internal static class PhpIniOwnedPathSmoke
             if (!Directory.Exists(Path.Combine(destinationRoot, "logs")))
                 throw new InvalidOperationException("PHP owned-path smoke: error_log parent directory was not created.");
             if (File.Exists(Path.Combine(destinationRoot, "ext", "php_stale.dll")))
-                throw new InvalidOperationException("PHP owned-path smoke: old extension DLL was copied wholesale.");
+                throw new InvalidOperationException("PHP owned-path smoke: package-managed ext directory copied a stale DLL.");
             if (!result.IniText.Contains(externalCert, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("PHP owned-path smoke: external certificate path was changed.");
             if (!result.IniText.Contains(externalRoot, StringComparison.OrdinalIgnoreCase))
