@@ -366,7 +366,12 @@ internal static partial class LocalizationService
     private static void TranslateProperty(DependencyObject target, DependencyProperty property)
     {
         if (target.GetValue(property) is not string value) return;
-        var translated = Translate(value);
+
+        // Apply the extended phrase catalog before the generic watcher can translate
+        // individual words such as "설정", "경로", "확인" and destroy the longer
+        // compatibility sentence patterns. This keeps dynamically generated advanced
+        // information fully localized instead of leaving mixed Korean/English text.
+        var translated = ExtendedLocalization.TranslateText(value);
         if (!string.Equals(value, translated, StringComparison.Ordinal)) target.SetValue(property, translated);
     }
 
