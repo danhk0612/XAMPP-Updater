@@ -39,10 +39,22 @@ public partial class App : Application
 
             if (window is MainWindow mainWindow)
             {
+                mainWindow.InitializePhpMyAdminUi();
                 mainWindow.InitializeConfigHistoryUi();
                 await mainWindow.InspectStartupRootAsync();
                 await mainWindow.InitializeReleaseLifecycleAsync();
-                await mainWindow.ResumeStartupUpdateAsync();
+
+                var resume = AdministratorPrivilege.GetStartupResumeUpdate();
+                if (resume is { } phpMyAdminResume &&
+                    string.Equals(phpMyAdminResume.Component, "PhpMyAdmin", StringComparison.OrdinalIgnoreCase))
+                {
+                    await mainWindow.ResumeStartupPhpMyAdminUpdateAsync(phpMyAdminResume.Version);
+                }
+                else
+                {
+                    await mainWindow.ResumeStartupUpdateAsync();
+                }
+
                 await mainWindow.ResumeStartupRollbackAsync();
             }
         });
