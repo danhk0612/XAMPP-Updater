@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType><xsd:choice maxOccurs="unbounded"><xsd:element name="data"><xsd:complexType><xsd:sequence><xsd:element name="value" type="xsd:string" minOccurs="0" /></xsd:sequence><xsd:attribute name="name" use="required" type="xsd:string" /><xsd:attribute name="type" type="xsd:string" /><xsd:attribute name="mimetype" type="xsd:string" /><xsd:attribute ref="xml:space" /></xsd:complexType></xsd:element><xsd:element name="resheader"><xsd:complexType><xsd:sequence><xsd:element name="value" type="xsd:string" minOccurs="0" /></xsd:sequence><xsd:attribute name="name" use="required" type="xsd:string" /></xsd:complexType></xsd:element></xsd:choice></xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Main_Subtitle" xml:space="preserve"><value>Safely update Apache, PHP, MariaDB, and phpMyAdmin with automatic recovery on failure.</value></data>
+  <data name="Main_XamppPath" xml:space="preserve"><value>XAMPP path</value></data>
+  <data name="Common_Browse" xml:space="preserve"><value>Browse</value></data>
+  <data name="Status_InspectingXampp" xml:space="preserve"><value>Inspecting the XAMPP installation...</value></data>
+  <data name="Nav_Components" xml:space="preserve"><value>Components</value></data>
+  <data name="Nav_Management" xml:space="preserve"><value>Management</value></data>
+  <data name="Nav_ConfigHistory" xml:space="preserve"><value>Configuration history</value></data>
+  <data name="Nav_Cleanup" xml:space="preserve"><value>Clean stored data</value></data>
+  <data name="Nav_OpenExplorer" xml:space="preserve"><value>Open in File Explorer</value></data>
+  <data name="Nav_RollbackBackups" xml:space="preserve"><value>Rollback backups</value></data>
+  <data name="Nav_ConfigHistoryFolder" xml:space="preserve"><value>Configuration history folder</value></data>
+  <data name="Nav_CacheTemp" xml:space="preserve"><value>Cache / temporary data</value></data>
+  <data name="Common_CurrentVersion" xml:space="preserve"><value>Current version</value></data>
+  <data name="Common_TargetVersion" xml:space="preserve"><value>Update version</value></data>
+  <data name="Status_CheckingUpdateInfo" xml:space="preserve"><value>Checking update information.</value></data>
+  <data name="Action_UpdateApache" xml:space="preserve"><value>Update Apache</value></data>
+  <data name="Action_UpdatePhp" xml:space="preserve"><value>Update PHP</value></data>
+  <data name="Action_UpdateMariaDb" xml:space="preserve"><value>Update MariaDB</value></data>
+  <data name="Action_UpdatePhpMyAdmin" xml:space="preserve"><value>Update phpMyAdmin</value></data>
+  <data name="Common_AdvancedInfo" xml:space="preserve"><value>Advanced information</value></data>
+  <data name="Common_ActivityLog" xml:space="preserve"><value>Activity log</value></data>
+  <data name="Action_OpenRecentLog" xml:space="preserve"><value>Open recent activity log</value></data>
+  <data name="Privilege_Admin" xml:space="preserve"><value>Administrator</value></data>
+  <data name="Privilege_Standard" xml:space="preserve"><value>Standard user</value></data>
+  <data name="Status_OnlineCheckNeeded" xml:space="preserve"><value>Online check required</value></data>
+  <data name="Status_OnlineChecking" xml:space="preserve"><value>Checking online...</value></data>
+  <data name="Status_OnlineCheckFailed" xml:space="preserve"><value>Online check failed</value></data>
+  <data name="Language_Label" xml:space="preserve"><value>Language</value></data>
+  <data name="Language_System" xml:space="preserve"><value>System default</value></data>
+  <data name="Language_Korean" xml:space="preserve"><value>Korean</value></data>
+  <data name="Language_English" xml:space="preserve"><value>English</value></data>
+  <data name="Language_ChangeTitle" xml:space="preserve"><value>Language</value></data>
+  <data name="Language_RestartNotice" xml:space="preserve"><value>The language setting has been changed. Restart the application to apply it.</value></data>
+  <data name="Common_UpdateCompleted" xml:space="preserve"><value>Update completed</value></data>
+  <data name="Common_UpdateFailed" xml:space="preserve"><value>Update failed</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="Common_No" xml:space="preserve"><value>No</value></data>
+</root>

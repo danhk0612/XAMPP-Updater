@@ -12,10 +12,16 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        LocalizationService.Initialize();
+
         EventManager.RegisterClassHandler(
             typeof(Window),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(ApplyWindowIcon));
+        EventManager.RegisterClassHandler(
+            typeof(FrameworkElement),
+            FrameworkElement.LoadedEvent,
+            new RoutedEventHandler(ApplyLocalization));
 
         base.OnStartup(e);
 
@@ -40,6 +46,7 @@ public partial class App : Application
             if (window is MainWindow mainWindow)
             {
                 mainWindow.InitializePhpMyAdminUi();
+                mainWindow.InitializeLocalizationUi();
                 mainWindow.InitializeConfigHistoryUi();
                 await mainWindow.InspectStartupRootAsync();
                 await mainWindow.InitializeReleaseLifecycleAsync();
@@ -58,6 +65,14 @@ public partial class App : Application
                 await mainWindow.ResumeStartupRollbackAsync();
             }
         });
+    }
+
+    private static void ApplyLocalization(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element)
+        {
+            LocalizationService.ApplyToElement(element);
+        }
     }
 
     private static void ApplyWindowIcon(object sender, RoutedEventArgs e)
