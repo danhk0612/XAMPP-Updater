@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,13 @@ namespace XamppUpdater.App;
 /// </summary>
 internal static class LocalizationCatalog
 {
+    private static readonly DependencyProperty CatalogWatchRegisteredProperty =
+        DependencyProperty.RegisterAttached(
+            "CatalogWatchRegistered",
+            typeof(bool),
+            typeof(LocalizationCatalog),
+            new PropertyMetadata(false));
+
     private static readonly Dictionary<string, string> ExactEnglish = new(StringComparer.Ordinal)
     {
         ["파일 선택 복원"] = "Restore selected files",
@@ -47,6 +55,8 @@ internal static class LocalizationCatalog
         ["적용할 설정 항목을 1개 이상 선택하세요."] = "Select at least one configuration entry to apply.",
         ["비교할 snapshot을 정확히 2개 선택하세요."] = "Select exactly two snapshots to compare.",
         ["서로 다른 구성요소의 snapshot은 비교할 수 없습니다."] = "Snapshots from different components cannot be compared.",
+        ["서로 다른 구성요소의 설정 snapshot은 비교할 수 없습니다."] = "Configuration snapshots from different components cannot be compared.",
+        ["서로 다른 XAMPP 설치의 설정 snapshot은 비교할 수 없습니다."] = "Configuration snapshots from different XAMPP installations cannot be compared.",
         ["현재 설정과 비교할 snapshot을 정확히 1개 선택하세요."] = "Select exactly one snapshot to compare with the current configuration.",
         ["메모 수정할 snapshot을 정확히 1개 선택하세요."] = "Select exactly one snapshot whose note you want to edit.",
         ["복원할 snapshot을 정확히 1개 선택하세요."] = "Select exactly one snapshot to restore.",
@@ -65,7 +75,17 @@ internal static class LocalizationCatalog
         ["이 snapshot을 구분할 메모를 입력하세요. 비워도 저장할 수 있습니다."] = "Enter a note to identify this snapshot. You may leave it empty.",
         ["snapshot 상태로 되돌릴 파일만 선택하세요. 현재 설정과 동일한 파일은 목록에서 제외됩니다."] = "Select only the files to restore to the snapshot state. Files identical to the current configuration are omitted.",
         ["'현재에만 존재' 항목을 선택하면 해당 파일은 삭제됩니다. 적용 전에는 전체 현재 설정이 안전 snapshot으로 저장됩니다."] = "Selecting an item that exists only in the current configuration will delete that file. The complete current configuration is saved as a safety snapshot before applying changes.",
-        ["자동 적용은 기존 줄의 값만 snapshot 값으로 교체하며 주석과 주변 구조는 유지합니다."] = "Automatic application replaces only existing values with snapshot values while preserving comments and surrounding structure."
+        ["자동 적용은 기존 줄의 값만 snapshot 값으로 교체하며 주석과 주변 구조는 유지합니다."] = "Automatic application replaces only existing values with snapshot values while preserving comments and surrounding structure.",
+        ["저장된 설정 snapshot이 없습니다.\r\n\r\n업데이트 실행 시 전·후 snapshot이 자동으로 저장됩니다."] = "There are no saved configuration snapshots.\r\n\r\nBefore/after snapshots are saved automatically when an update runs.",
+        ["현재 설정 snapshot을 저장하려면 상단 필터에서 Apache, PHP 또는 MariaDB 중 하나를 선택하세요."] = "To save a snapshot of the current configuration, select Apache, PHP, or MariaDB in the filter above.",
+        ["manifest 파일이 없습니다."] = "The manifest file is missing.",
+        ["snapshot 폴더를 확인할 수 없습니다."] = "The snapshot folder could not be determined.",
+        ["다른 XAMPP 설치 경로에서 생성한 snapshot은 복원할 수 없습니다."] = "A snapshot created from a different XAMPP installation path cannot be restored.",
+        ["snapshot manifest를 찾을 수 없습니다."] = "The snapshot manifest could not be found.",
+        ["snapshot 설정 파일이 없습니다."] = "A snapshot configuration file is missing.",
+        ["MariaDB 서버 실행 파일을 찾을 수 없습니다."] = "The MariaDB server executable could not be found.",
+        ["검증 실행 파일을 찾을 수 없습니다."] = "The validation executable could not be found.",
+        ["설정 검증 프로세스를 시작하지 못했습니다."] = "The configuration validation process could not be started."
     };
 
     private static readonly (string Korean, string English)[] PhraseEnglish =
@@ -94,12 +114,28 @@ internal static class LocalizationCatalog
         ("선택 snapshot", "Selected snapshots"),
         ("검증 성공 파일", "Verified files"),
         ("문제 snapshot", "Problem snapshots"),
-        ("정상", "Valid"),
-        ("문제", "Issues"),
         ("선택한 snapshot", "Selected snapshot"),
+        ("snapshot 상대 경로가 허용된 루트를 벗어납니다", "The snapshot relative path is outside the allowed root"),
+        ("snapshot 파일 크기가 manifest와 다릅니다", "The snapshot file size does not match the manifest"),
+        ("snapshot 파일 SHA256이 manifest와 다릅니다", "The snapshot file SHA256 does not match the manifest"),
+        ("파일 없음", "Missing file"),
+        ("크기 불일치", "Size mismatch"),
+        ("SHA256 불일치", "SHA256 mismatch"),
+        ("에서 저장할 설정 파일을 찾지 못했습니다", "contains no configuration files to save"),
+        ("설정 검증 실패", "Configuration validation failed"),
+        ("자동 원복 실패", "Automatic restore failed"),
+        ("서비스 원상복구 실패", "Failed to restore the service state"),
         ("삭제 완료", "Deletion completed"),
         ("삭제 실패", "Deletion failed"),
+        ("삭제한 이력은 복구할 수 없습니다", "deleted history cannot be recovered"),
+        ("실제 설정에는 영향을 주지 않지만", "This does not affect the live configuration, but"),
+        ("삭제하시겠습니까?", "Do you want to delete them?"),
+        ("외", "and"),
         ("선택한 설정 항목", "Selected configuration entries"),
+        ("설정 항목", "Configuration entries"),
+        ("병합을 완료했습니다", "merge completed"),
+        ("병합에 실패했습니다", "merge failed"),
+        ("snapshot 값으로 병합합니다", "will be merged using snapshot values"),
         ("검증 실패 시 직전 설정으로 자동 원복합니다", "If validation fails, the previous configuration will be restored automatically"),
         ("선택한 설정 파일", "Selected configuration files"),
         ("복원이 완료되었습니다", "Restore completed successfully"),
@@ -107,9 +143,22 @@ internal static class LocalizationCatalog
         ("설정을 선택한 snapshot 상태로 전체 복원합니다", "Restore the complete configuration to the selected snapshot state"),
         ("설정 복원이 완료되었습니다", "Configuration restore completed successfully"),
         ("설정 복원에 실패했습니다", "Configuration restore failed"),
+        ("복원 대상", "Restore target"),
+        ("복원 원본", "Restore source"),
+        ("복원 직전 안전 snapshot 저장", "Saved pre-restore safety snapshot"),
+        ("복원 후 설정 snapshot 저장", "Saved post-restore configuration snapshot"),
+        ("복원 실패 후 직전 설정 snapshot 자동 원복 완료", "Automatically restored the pre-restore configuration snapshot after restore failure"),
+        ("서비스 재시작 및 RUNNING 확인", "Restarted service and verified RUNNING"),
+        ("서비스 원상복구 완료", "Service state restored"),
         ("당시 버전", "Version at capture"),
         ("단계", "Stage"),
         ("메모", "Note"),
+        ("구성요소", "Component"),
+        ("캡처", "Captured"),
+        ("설정 파일", "Configuration files"),
+        ("다중 선택은 삭제와 무결성 검사에 사용할 수 있습니다", "Multiple selection can be used for deletion and integrity checks"),
+        ("snapshot 비교는 같은 구성요소 2개를 선택해야 합니다", "Snapshot comparison requires two snapshots from the same component"),
+        ("선택됨", "selected"),
         ("현재에만 존재", "Exists only in current configuration"),
         ("snapshot에만 존재", "Exists only in snapshot"),
         ("선택 시 삭제", "delete when selected"),
@@ -141,7 +190,8 @@ internal static class LocalizationCatalog
         ("서비스", "Service"),
         ("미감지", "not detected"),
         ("미상", "unknown"),
-        ("미등록", "not registered")
+        ("미등록", "not registered"),
+        ("없음", "none")
     };
 
     public static string Text(string korean, string english) =>
@@ -179,5 +229,26 @@ internal static class LocalizationCatalog
 
         if (element is HeaderedItemsControl headered && headered.Header is string header)
             headered.Header = TranslateUserText(header);
+
+        if (element is TextBox { IsReadOnly: true } textBox && Window.GetWindow(textBox) is ConfigHistoryWindow)
+        {
+            TranslateConfigHistoryTextBox(textBox);
+            WatchConfigHistoryTextBox(textBox);
+        }
+    }
+
+    private static void TranslateConfigHistoryTextBox(TextBox textBox)
+    {
+        var translated = TranslateUserText(textBox.Text);
+        if (!string.Equals(textBox.Text, translated, StringComparison.Ordinal))
+            textBox.Text = translated;
+    }
+
+    private static void WatchConfigHistoryTextBox(TextBox textBox)
+    {
+        if ((bool)textBox.GetValue(CatalogWatchRegisteredProperty)) return;
+        var descriptor = DependencyPropertyDescriptor.FromProperty(TextBox.TextProperty, typeof(TextBox));
+        descriptor?.AddValueChanged(textBox, (_, _) => TranslateConfigHistoryTextBox(textBox));
+        textBox.SetValue(CatalogWatchRegisteredProperty, true);
     }
 }
