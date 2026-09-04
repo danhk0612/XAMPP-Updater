@@ -22,5 +22,23 @@ internal static class PhpStagingPathSmoke
             throw new InvalidOperationException("PHP staging path smoke: browscap path was not rebased to staging PHP root.");
         if (!rewritten.Contains("extension=php_curl.dll", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("PHP staging path smoke: non-path php.ini directive changed unexpectedly.");
+
+        if (OperatingSystem.IsWindows())
+        {
+            const string windowsFinalRoot = @"C:\xampp\php";
+            const string windowsStageRoot = @"C:\xampp\.xampp-updater-php-stage-test\package";
+            var rootRelative =
+                "extension_dir=\"\\xampp\\php\\ext\"\r\n" +
+                "include_path=\".;\\xampp\\php\\PEAR\"\r\n" +
+                "extension=php_openssl.dll";
+            var windowsRewritten = PhpStagingIniPathRewriter.RewriteText(rootRelative, windowsFinalRoot, windowsStageRoot);
+
+            if (windowsRewritten.Contains(@"\xampp\php\", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("PHP staging path smoke: drive-root-relative XAMPP PHP path remained in validation ini.");
+            if (!windowsRewritten.Contains(windowsStageRoot + @"\ext", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("PHP staging path smoke: drive-root-relative extension_dir was not rebased.");
+            if (!windowsRewritten.Contains(windowsStageRoot + @"\PEAR", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("PHP staging path smoke: drive-root-relative include_path was not rebased.");
+        }
     }
 }
