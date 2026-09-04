@@ -6,8 +6,7 @@ namespace XamppUpdater.App;
 // automatically receive localized user-facing text without touching update logic.
 internal static class MessageBox
 {
-    private static string T(string text) =>
-        LocalizationCatalog.TranslateUserText(UserMessageLocalization.PreTranslate(text));
+    private static string T(string text) => ExtendedLocalization.TranslateText(text);
 
     public static MessageBoxResult Show(string messageBoxText) =>
         System.Windows.MessageBox.Show(T(messageBoxText));
