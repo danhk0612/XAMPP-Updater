@@ -25,18 +25,7 @@ public sealed class RollbackBackupCatalogService : IRollbackBackupCatalogService
             try
             {
                 var manifest = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifestPath));
-                if (manifest is null || manifest.Type != type) continue;
-                if (!PathsEqual(manifest.XamppRoot, xamppRoot)) continue;
-
-                // Schema 1/2 manifests did not have Kind. BackupKind.Rollback=0 keeps those manifests compatible.
-                // New safety backups are never exposed as user rollback targets.
-                if (manifest.Kind != BackupKind.Rollback) continue;
-
-                // 업데이트 전 롤백 백업은 CurrentVersion -> TargetVersion 관계를 기록한다.
-                // 현재 설치 버전이 당시 TargetVersion과 같고, 백업 버전이 더 낮을 때만 직접 롤백 가능하다.
-                if (!string.Equals(manifest.TargetVersion, currentVersion, StringComparison.OrdinalIgnoreCase)) continue;
-                if (!IsOlder(manifest.CurrentVersion, currentVersion)) continue;
-                if (type == XamppComponentType.MariaDb && manifest.LogicalBackup is null) continue;
+                if (manifest is null || !IsCandidateMetadata(manifest, xamppRoot, type, currentVersion)) continue;
 
                 if (!IsManifestLocationConsistent(manifest, manifestPath)) continue;
 
@@ -83,6 +72,28 @@ public sealed class RollbackBackupCatalogService : IRollbackBackupCatalogService
 
     public BackupResult? FindLatestCandidate(string xamppRoot, XamppComponentType type, string currentVersion) =>
         ListCandidates(xamppRoot, type, currentVersion).FirstOrDefault();
+
+    internal static bool IsCandidateMetadata(
+        BackupManifest manifest,
+        string xamppRoot,
+        XamppComponentType type,
+        string currentVersion)
+    {
+        if (manifest.Type != type) return false;
+        if (!PathsEqual(manifest.XamppRoot, xamppRoot)) return false;
+
+        // Schema 1/2 manifests did not have Kind. BackupKind.Rollback=0 keeps those manifests compatible.
+        // New safety backups are never exposed as user rollback targets.
+        if (manifest.Kind != BackupKind.Rollback) return false;
+
+        // 업데이트 전 롤백 백업은 CurrentVersion -> TargetVersion 관계를 기록한다.
+        // 현재 설치 버전이 당시 TargetVersion과 같고, 백업 버전이 더 낮을 때만 직접 롤백 가능하다.
+        if (!string.Equals(manifest.TargetVersion, currentVersion, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!IsOlder(manifest.CurrentVersion, currentVersion)) return false;
+        if (type == XamppComponentType.MariaDb && manifest.LogicalBackup is null) return false;
+
+        return true;
+    }
 
     internal static string GetBackupRoot() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
