@@ -25,7 +25,7 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
     private readonly TextBlock _changePosition = new() { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
     private readonly CheckBox _collapseUnchanged = new()
     {
-        Content = "변경 주변만 보기",
+        Content = LocalizationCatalog.Text("변경 주변만 보기", "Show changes with context"),
         IsChecked = true,
         VerticalAlignment = VerticalAlignment.Center,
         Margin = new Thickness(0, 0, 12, 0)
@@ -37,7 +37,7 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
     public ConfigSnapshotContentDiffWindow(ConfigSnapshotDiff diff)
     {
         _diff = diff;
-        Title = $"설정 내용 비교 - {diff.Older.Type}";
+        Title = LocalizationCatalog.Text($"설정 내용 비교 - {diff.Older.Type}", $"Configuration content comparison - {diff.Older.Type}");
         Width = 1380;
         Height = 780;
         MinWidth = 980;
@@ -54,9 +54,13 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
 
         var summary = new TextBlock
         {
-            Text = $"이전: {diff.Older.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Older.Version} / {diff.Older.Stage}\n" +
-                   $"이후: {diff.Newer.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Newer.Version} / {diff.Newer.Stage}\n" +
-                   $"파일 변경 {diff.Changed} / 추가 {diff.Added} / 삭제 {diff.Removed} / 동일 {diff.Same}",
+            Text = LocalizationCatalog.Text(
+                $"이전: {diff.Older.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Older.Version} / {diff.Older.Stage}\n" +
+                $"이후: {diff.Newer.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Newer.Version} / {diff.Newer.Stage}\n" +
+                $"파일 변경 {diff.Changed} / 추가 {diff.Added} / 삭제 {diff.Removed} / 동일 {diff.Same}",
+                $"Previous: {diff.Older.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Older.Version} / {diff.Older.Stage}\n" +
+                $"Next: {diff.Newer.CapturedAt.LocalDateTime:yyyy-MM-dd HH:mm:ss} / {diff.Newer.Version} / {diff.Newer.Stage}\n" +
+                $"Changed files: {diff.Changed} / added: {diff.Added} / removed: {diff.Removed} / unchanged: {diff.Same}"),
             Margin = new Thickness(0, 0, 0, 10)
         };
         Grid.SetColumnSpan(summary, 3);
@@ -84,8 +88,8 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
         headers.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         headers.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) });
         headers.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        var olderLabel = new TextBlock { Text = "이전 snapshot", FontWeight = FontWeights.SemiBold };
-        var newerLabel = new TextBlock { Text = "이후 snapshot", FontWeight = FontWeights.SemiBold };
+        var olderLabel = new TextBlock { Text = LocalizationCatalog.Text("이전 snapshot", "Previous snapshot"), FontWeight = FontWeights.SemiBold };
+        var newerLabel = new TextBlock { Text = LocalizationCatalog.Text("이후 snapshot", "Next snapshot"), FontWeight = FontWeights.SemiBold };
         Grid.SetColumn(olderLabel, 0);
         Grid.SetColumn(newerLabel, 2);
         headers.Children.Add(olderLabel);
@@ -109,18 +113,28 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
         _collapseUnchanged.Unchecked += (_, _) => ApplyCollapsedMode();
         controls.Children.Add(_collapseUnchanged);
 
-        var previous = new Button { Content = "◀ 이전 차이", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 6, 0) };
+        var previous = new Button
+        {
+            Content = LocalizationCatalog.Text("◀ 이전 차이", "◀ Previous difference"),
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 6, 0)
+        };
         previous.Click += (_, _) => NavigateChange(-1);
         controls.Children.Add(previous);
         controls.Children.Add(_changePosition);
 
-        var next = new Button { Content = "다음 차이 ▶", Padding = new Thickness(12, 5, 12, 5), Margin = new Thickness(0, 0, 12, 0) };
+        var next = new Button
+        {
+            Content = LocalizationCatalog.Text("다음 차이 ▶", "Next difference ▶"),
+            Padding = new Thickness(12, 5, 12, 5),
+            Margin = new Thickness(0, 0, 12, 0)
+        };
         next.Click += (_, _) => NavigateChange(1);
         controls.Children.Add(next);
 
         var close = new Button
         {
-            Content = "닫기",
+            Content = LocalizationCatalog.Text("닫기", "Close"),
             Padding = new Thickness(18, 5, 18, 5),
             IsCancel = true
         };
@@ -137,8 +151,10 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
         }
         else
         {
-            _fileSummary.Text = "두 snapshot 사이에 변경된 설정 파일이 없습니다.";
-            _changePosition.Text = "차이 없음";
+            _fileSummary.Text = LocalizationCatalog.Text(
+                "두 snapshot 사이에 변경된 설정 파일이 없습니다.",
+                "There are no changed configuration files between the two snapshots.");
+            _changePosition.Text = LocalizationCatalog.Text("차이 없음", "No differences");
         }
     }
 
@@ -158,10 +174,13 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
 
         var olderExists = SnapshotContains(_diff.Older, selected.Item.RelativePath);
         var newerExists = SnapshotContains(_diff.Newer, selected.Item.RelativePath);
-        _fileSummary.Text =
+        _fileSummary.Text = LocalizationCatalog.Text(
             $"[{selected.Item.Kind}] {selected.Item.RelativePath}  /  변경 행 {selected.ChangedRows:N0}개" +
             (!olderExists ? "  /  이전 snapshot에 없음" : string.Empty) +
-            (!newerExists ? "  /  이후 snapshot에 없음" : string.Empty);
+            (!newerExists ? "  /  이후 snapshot에 없음" : string.Empty),
+            $"[{selected.Item.Kind}] {selected.Item.RelativePath}  /  changed lines: {selected.ChangedRows:N0}" +
+            (!olderExists ? "  /  not present in the previous snapshot" : string.Empty) +
+            (!newerExists ? "  /  not present in the next snapshot" : string.Empty));
 
         if (_changeCursor >= 0)
         {
@@ -180,7 +199,7 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
     {
         if (_changeRows.Count == 0)
         {
-            _changePosition.Text = "차이 없음";
+            _changePosition.Text = LocalizationCatalog.Text("차이 없음", "No differences");
             return;
         }
 
@@ -192,7 +211,7 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
     private void UpdateChangePosition()
     {
         _changePosition.Text = _changeRows.Count == 0
-            ? "차이 없음"
+            ? LocalizationCatalog.Text("차이 없음", "No differences")
             : $"{_changeCursor + 1:N0} / {_changeRows.Count:N0}";
     }
 
@@ -236,6 +255,8 @@ public sealed class ConfigSnapshotContentDiffWindow : Window
 
         public ConfigSnapshotDiffItem Item { get; }
         public int ChangedRows { get; }
-        public override string ToString() => $"[{Item.Kind}] {Item.RelativePath}  ({ChangedRows:N0}행)";
+        public override string ToString() => LocalizationCatalog.Text(
+            $"[{Item.Kind}] {Item.RelativePath}  ({ChangedRows:N0}행)",
+            $"[{Item.Kind}] {Item.RelativePath}  ({ChangedRows:N0} lines)");
     }
 }
