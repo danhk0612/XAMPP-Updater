@@ -14,6 +14,8 @@ AssertEqual("service state stopped", "STOPPED", WindowsServiceStateReader.MapSta
 AssertEqual("service state running", "RUNNING", WindowsServiceStateReader.MapState(4));
 AssertEqual("service state paused", "PAUSED", WindowsServiceStateReader.MapState(7));
 
+CheckRollbackCatalogPolicy();
+
 AssertEqual(
     "Apache online parser",
     "2.4.68",
@@ -166,6 +168,50 @@ if (failures.Count > 0)
 Console.WriteLine("All smoke tests passed.");
 return 0;
 
+void CheckRollbackCatalogPolicy()
+{
+    var root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "xampp-updater-policy-root"));
+    var componentRoot = Path.Combine(root, "apache");
+    var backupRoot = Path.Combine(Path.GetTempPath(), "xampp-updater-policy-backup");
+    var files = Array.Empty<BackupManifestFile>();
+
+    BackupManifest Make(
+        int schema,
+        string current,
+        string target,
+        BackupKind kind = BackupKind.Rollback,
+        XamppComponentType type = XamppComponentType.Apache,
+        LogicalBackupManifest? logical = null) =>
+        new(schema, DateTimeOffset.Now, type, root, componentRoot, current, target, backupRoot,
+            null, null, false, files, logical, kind);
+
+    AssertTrue("rollback catalog accepts direct old-to-current backup",
+        RollbackBackupCatalogService.IsCandidateMetadata(Make(3, "2.4.41", "2.4.68"), root, XamppComponentType.Apache, "2.4.68"));
+    AssertFalse("rollback catalog rejects safety backup",
+        RollbackBackupCatalogService.IsCandidateMetadata(Make(3, "2.4.68", "2.4.41", BackupKind.Safety), root, XamppComponentType.Apache, "2.4.41"));
+    AssertFalse("rollback catalog rejects target-version mismatch",
+        RollbackBackupCatalogService.IsCandidateMetadata(Make(3, "2.4.41", "2.4.68"), root, XamppComponentType.Apache, "2.4.70"));
+    AssertFalse("rollback catalog rejects reverse direction",
+        RollbackBackupCatalogService.IsCandidateMetadata(Make(2, "2.4.68", "2.4.41"), root, XamppComponentType.Apache, "2.4.41"));
+
+    AssertTrue("retention detects explicit safety backup",
+        BackupRetentionService.IsSafetyBackup(Make(3, "2.4.68", "2.4.41", BackupKind.Safety)));
+    AssertTrue("retention detects legacy reverse-direction safety backup",
+        BackupRetentionService.IsSafetyBackup(Make(2, "2.4.68", "2.4.41")));
+    AssertFalse("retention preserves legacy normal rollback backup",
+        BackupRetentionService.IsSafetyBackup(Make(2, "2.4.41", "2.4.68")));
+
+    var logical = new LogicalBackupManifest("logical.sql", 0, string.Empty);
+    AssertFalse("MariaDB rollback candidate requires logical backup",
+        RollbackBackupCatalogService.IsCandidateMetadata(
+            Make(3, "10.4.34", "12.3.3", BackupKind.Rollback, XamppComponentType.MariaDb),
+            root, XamppComponentType.MariaDb, "12.3.3"));
+    AssertTrue("MariaDB rollback candidate accepts logical backup metadata",
+        RollbackBackupCatalogService.IsCandidateMetadata(
+            Make(3, "10.4.34", "12.3.3", BackupKind.Rollback, XamppComponentType.MariaDb, logical),
+            root, XamppComponentType.MariaDb, "12.3.3"));
+}
+
 void CheckVersion(XamppComponentType type, string output, string expected)
 {
     var actual = ComponentVersionDetector.ParseVersion(type, output);
@@ -214,6 +260,16 @@ void CheckZipPeArchitecture()
     {
         if (File.Exists(zipPath)) File.Delete(zipPath);
     }
+}
+
+void AssertTrue(string name, bool value)
+{
+    if (!value) failures.Add($"{name}: expected true, actual false.");
+}
+
+void AssertFalse(string name, bool value)
+{
+    if (value) failures.Add($"{name}: expected false, actual true.");
 }
 
 void AssertEqual(string name, string expected, string? actual)
