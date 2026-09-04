@@ -17,39 +17,74 @@ internal static class ExtendedLocalization
     private static readonly Dictionary<string, string> PlanTerms = new(StringComparer.Ordinal)
     {
         ["백업"] = "Backup",
+        ["Backup"] = "Backup",
         ["전체 백업"] = "Full backup",
+        ["Full backup"] = "Full backup",
         ["패키지 확인"] = "Package check",
+        ["Package check"] = "Package check",
         ["대상 패키지 준비"] = "Target package preparation",
+        ["대상 Package preparation"] = "Target package preparation",
+        ["Target package preparation"] = "Target package preparation",
         ["대상 패키지 확인"] = "Target package check",
+        ["Target package check"] = "Target package check",
         ["설정 비교"] = "Configuration comparison",
+        ["Configuration comparison"] = "Configuration comparison",
         ["모듈 호환성"] = "Module compatibility",
+        ["Module compatibility"] = "Module compatibility",
         ["설정 이식"] = "Configuration migration",
+        ["Configuration 이식"] = "Configuration migration",
+        ["Configuration migration"] = "Configuration migration",
         ["충돌 확인"] = "Conflict review",
+        ["충돌 Check"] = "Conflict review",
+        ["Conflict review"] = "Conflict review",
         ["검증"] = "Validation",
+        ["Validation"] = "Validation",
         ["확장 인벤토리"] = "Extension inventory",
+        ["Extension inventory"] = "Extension inventory",
         ["php.ini 비교"] = "php.ini comparison",
+        ["php.ini comparison"] = "php.ini comparison",
         ["설정 마이그레이션"] = "Configuration migration",
+        ["Configuration 마이그레이션"] = "Configuration migration",
         ["확장 호환성"] = "Extension compatibility",
+        ["Extension compatibility"] = "Extension compatibility",
         ["Apache 연동 갱신"] = "Apache integration update",
+        ["Apache integration update"] = "Apache integration update",
         ["사용자 확인"] = "User review",
+        ["사용자 Check"] = "User review",
+        ["User review"] = "User review",
         ["업그레이드 경로 계산"] = "Upgrade path calculation",
+        ["업그레이드 Path 계산"] = "Upgrade path calculation",
+        ["Upgrade path calculation"] = "Upgrade path calculation",
         ["바이너리 교체"] = "Binary replacement",
+        ["Binary replacement"] = "Binary replacement",
         ["업그레이드 도구"] = "Upgrade tool",
+        ["Upgrade tool"] = "Upgrade tool",
         ["상태 검증"] = "Status validation",
+        ["Status validation"] = "Status validation",
         ["문제 항목 확인"] = "Issue review",
+        ["Issues 항목 Check"] = "Issue review",
+        ["Issue review"] = "Issue review",
         ["롤백"] = "Rollback",
+        ["Rollback"] = "Rollback",
         ["버전 확인"] = "Version check",
-        ["다운그레이드 차단"] = "Downgrade blocked"
+        ["Version check"] = "Version check",
+        ["다운그레이드 차단"] = "Downgrade blocked",
+        ["Downgrade blocked"] = "Downgrade blocked"
     };
 
     private static readonly (string Korean, string English)[] PlanPhraseReplacements =
     {
         ("PHP Apache 모듈까지 포함해 비교·이식하는 보조 업데이트 경로입니다.", "uses an assisted update path that compares and migrates the PHP Apache module as well."),
+        ("PHP Apache 모듈까지 포함해 비교·이식하는 보조 업데이트 Path입니다.", "uses an assisted update path that compares and migrates the PHP Apache module as well."),
         ("설정/모듈 비교 후 자동 교체를 준비합니다.", "prepares an automatic replacement after comparing configuration and modules."),
+        ("Configuration/모듈 비교 후 자동 교체를 준비합니다.", "prepares an automatic replacement after comparing configuration and modules."),
         ("동일 계열 패치 업데이트로 대부분 자동 처리 가능합니다.", "is a same-series patch update and can be handled mostly automatically."),
         ("메이저/마이너 변경이지만 설정·확장·Apache 연동을 비교하며 보조 업데이트로 진행합니다.", "is a major/minor change and uses an assisted update that compares configuration, extensions, and Apache integration."),
+        ("메이저/마이너 변경이지만 Configuration·확장·Apache 연동을 비교하며 보조 업데이트로 진행합니다.", "is a major/minor change and uses an assisted update that compares configuration, extensions, and Apache integration."),
         ("동일 계열 패치 업데이트 경로입니다.", "uses a same-series patch update path."),
+        ("동일 계열 패치 업데이트 Path입니다.", "uses a same-series patch update path."),
         ("직접 major 업그레이드를 사전 검증하고 실패 시 원본으로 롤백합니다.", "pre-validates the direct major upgrade and restores the original installation if it fails."),
+        ("직접 major 업그레이드를 사전 검증하고 failed 시 원본으로 롤백합니다.", "pre-validates the direct major upgrade and restores the original installation if it fails."),
         ("현재 버전을 확인할 수 없습니다.", "The current version could not be determined."),
         ("공식 패키지 위치 확인됨", "Official package location resolved"),
         ("업데이트 준비 단계에서 선택 버전에 맞는 Windows 패키지를 자동 탐색합니다.", "The preparation stage will automatically locate the Windows package for the selected version.")
@@ -72,6 +107,7 @@ internal static class ExtendedLocalization
         ("데이터/설정 전체 백업 후 공식 중간 업그레이드 경로를 따라 단계별로 진행하고 각 단계에서 검증하는 마이그레이션이 필요합니다.", "A migration is required: fully back up data/configuration, follow the official intermediate upgrade path, and validate each step."),
         ("백업, 바이너리 교체, mariadb-upgrade, 상태 검증을 순차 자동화하는 보조 업데이트로 진행할 수 있습니다.", "An assisted update can automate backup, binary replacement, mariadb-upgrade, and status validation in sequence."),
         ("기존 config.inc.php와 .htaccess, upload/save 폴더를 보존하고 전체 롤백 백업 후 폴더를 교체합니다.", "The existing config.inc.php, .htaccess, and upload/save folders will be preserved, then the folder will be replaced after a full rollback backup."),
+        ("기존 config.inc.php와 .htaccess, upload/save folder를 보존하고 전체 rollback backup 후 folder를 교체합니다.", "The existing config.inc.php, .htaccess, and upload/save folders will be preserved, then the folder will be replaced after a full rollback backup."),
         ("현재 phpMyAdmin", "Current phpMyAdmin"),
         ("은 최신 안정판입니다.", " is the latest stable release."),
         ("설치 버전 ", "Installed version "),
@@ -142,7 +178,7 @@ internal static class ExtendedLocalization
     {
         var planMatch = Regex.Match(
             text,
-            @"^업데이트 경로: (?<summary>[^\r\n]+)\r?\n자동 (?<automatic>\d+) / 보조 (?<assisted>\d+) / 확인 (?<confirm>\d+)\r?\n(?<steps>[^\r\n]+)(?:\r?\n패키지: (?<package>.+))?$",
+            @"^(?:업데이트 경로|업데이트 Path|Update path): (?<summary>[^\r\n]+)\r?\n(?:자동|Automatic) (?<automatic>\d+) / (?:보조|Assisted) (?<assisted>\d+) / (?:확인|Check|Review) (?<confirm>\d+)\r?\n(?<steps>[^\r\n]+)(?:\r?\n(?:패키지|Package): (?<package>.+))?$",
             RegexOptions.CultureInvariant);
         if (planMatch.Success)
         {
@@ -150,7 +186,7 @@ internal static class ExtendedLocalization
             var steps = string.Join(
                 " → ",
                 planMatch.Groups["steps"].Value.Split(" → ", StringSplitOptions.None)
-                    .Select(step => PlanTerms.TryGetValue(step, out var translatedStep) ? translatedStep : TranslatePlanPhrase(step)));
+                    .Select(TranslatePlanStep));
             var result =
                 $"Update path: {summary}\nAutomatic {planMatch.Groups["automatic"].Value} / Assisted {planMatch.Groups["assisted"].Value} / Review {planMatch.Groups["confirm"].Value}\n{steps}";
             if (planMatch.Groups["package"].Success)
@@ -160,19 +196,35 @@ internal static class ExtendedLocalization
 
         var onlineMatch = Regex.Match(
             text,
-            @"^온라인 확인 완료: (?<time>.+?) / 계열별 선택 버전 (?<count>\d+)개$",
+            @"^(?:온라인 확인 완료|Online check completed): (?<time>.+?) / (?:계열별 선택 버전|series별 Selected version|series-specific selectable versions) (?<count>\d+)(?:개| items)?$",
             RegexOptions.CultureInvariant);
         if (onlineMatch.Success)
             return $"Online check completed: {onlineMatch.Groups["time"].Value} / {onlineMatch.Groups["count"].Value} series-specific selectable versions";
 
         var phpMyAdminPlan = Regex.Match(
             text,
-            @"^phpMyAdmin (?<current>\d+(?:\.\d+)+) → (?<target>\d+(?:\.\d+)+)\. 기존 config\.inc\.php와 \.htaccess, upload/save 폴더를 보존하고 전체 롤백 백업 후 폴더를 교체합니다\.$",
+            @"^phpMyAdmin (?<current>\d+(?:\.\d+)+) → (?<target>\d+(?:\.\d+)+)\. (?<detail>.+)$",
             RegexOptions.CultureInvariant);
-        if (phpMyAdminPlan.Success)
+        if (phpMyAdminPlan.Success &&
+            (phpMyAdminPlan.Groups["detail"].Value.Contains("config.inc.php", StringComparison.OrdinalIgnoreCase) ||
+             phpMyAdminPlan.Groups["detail"].Value.Contains("rollback backup", StringComparison.OrdinalIgnoreCase)))
+        {
             return $"phpMyAdmin {phpMyAdminPlan.Groups["current"].Value} → {phpMyAdminPlan.Groups["target"].Value}. The existing config.inc.php, .htaccess, and upload/save folders will be preserved, then the folder will be replaced after a full rollback backup.";
+        }
 
         return text;
+    }
+
+    private static string TranslatePlanStep(string step)
+    {
+        if (PlanTerms.TryGetValue(step, out var exact)) return exact;
+        var normalized = step
+            .Replace("Configuration ", "설정 ", StringComparison.Ordinal)
+            .Replace("Package preparation", "패키지 준비", StringComparison.Ordinal)
+            .Replace("Path", "경로", StringComparison.Ordinal)
+            .Replace("Issues", "문제", StringComparison.Ordinal)
+            .Replace("Check", "확인", StringComparison.Ordinal);
+        return PlanTerms.TryGetValue(normalized, out exact) ? exact : TranslatePlanPhrase(step);
     }
 
     private static string TranslatePlanPhrase(string value)
