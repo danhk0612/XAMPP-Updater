@@ -23,6 +23,28 @@ internal static class PhpStagingPathSmoke
         if (!rewritten.Contains("extension=php_curl.dll", StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("PHP staging path smoke: non-path php.ini directive changed unexpectedly.");
 
+        var materializeRoot = Path.Combine(Path.GetTempPath(), "xampp-updater-browscap-smoke-" + Guid.NewGuid().ToString("N"));
+        var materializeFinal = Path.Combine(materializeRoot, "xampp", "php");
+        var materializeStage = Path.Combine(materializeRoot, "stage", "php");
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(materializeFinal, "extras"));
+            Directory.CreateDirectory(materializeStage);
+            File.WriteAllText(Path.Combine(materializeFinal, "extras", "browscap.ini"), "[GJK_Browscap_Version]");
+            var sourceIni = Path.Combine(materializeStage, "migrated.ini");
+            File.WriteAllText(sourceIni, $"browscap=\"{Path.Combine(materializeFinal, "extras", "browscap.ini")}\"");
+
+            var validationIni = PhpStagingIniPathRewriter.CreateValidationIni(sourceIni, materializeFinal, materializeStage);
+            if (!File.Exists(validationIni))
+                throw new InvalidOperationException("PHP staging path smoke: validation ini was not created.");
+            if (!File.Exists(Path.Combine(materializeStage, "extras", "browscap.ini")))
+                throw new InvalidOperationException("PHP staging path smoke: browscap file was not materialized into staging PHP root.");
+        }
+        finally
+        {
+            try { if (Directory.Exists(materializeRoot)) Directory.Delete(materializeRoot, recursive: true); } catch { }
+        }
+
         if (OperatingSystem.IsWindows())
         {
             const string windowsFinalRoot = @"C:\xampp\php";
