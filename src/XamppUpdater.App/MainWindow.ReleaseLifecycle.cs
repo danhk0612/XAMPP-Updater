@@ -20,6 +20,7 @@ public partial class MainWindow
         InitializeRollbackUi();
         InitializeSelfUpdateUi();
         InitializeDiagnosticsUi();
+        ApplyNavigationLayout();
         ApacheTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
         PhpTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
         MariaDbTargetComboBox.SelectionChanged += (_, _) => RefreshPrimaryUpdateButtons();
