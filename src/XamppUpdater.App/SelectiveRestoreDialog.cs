@@ -14,7 +14,7 @@ public sealed class SelectiveRestoreDialog : Window
 
     public SelectiveRestoreDialog(ConfigSnapshotDiff diff)
     {
-        Title = $"선택 설정 복원 - {diff.Older.Type}";
+        Title = LocalizationCatalog.Text($"선택 설정 복원 - {diff.Older.Type}", $"Selective configuration restore - {diff.Older.Type}");
         Width = 780;
         Height = 620;
         MinWidth = 640;
@@ -29,22 +29,35 @@ public sealed class SelectiveRestoreDialog : Window
         var top = new StackPanel();
         top.Children.Add(new TextBlock
         {
-            Text = "snapshot 상태로 되돌릴 파일만 선택하세요. 현재 설정과 동일한 파일은 목록에서 제외됩니다.",
+            Text = LocalizationCatalog.Text(
+                "snapshot 상태로 되돌릴 파일만 선택하세요. 현재 설정과 동일한 파일은 목록에서 제외됩니다.",
+                "Select only the files to restore to the snapshot state. Files identical to the current configuration are omitted."),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 6)
         });
         top.Children.Add(new TextBlock
         {
-            Text = "'현재에만 존재' 항목을 선택하면 해당 파일은 삭제됩니다. 적용 전에는 전체 현재 설정이 안전 snapshot으로 저장됩니다.",
+            Text = LocalizationCatalog.Text(
+                "'현재에만 존재' 항목을 선택하면 해당 파일은 삭제됩니다. 적용 전에는 전체 현재 설정이 안전 snapshot으로 저장됩니다.",
+                "Selecting an item that exists only in the current configuration will delete that file. The complete current configuration is saved as a safety snapshot before applying changes."),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         });
         top.Children.Add(_summary);
 
         var selectButtons = new StackPanel { Orientation = Orientation.Horizontal };
-        var all = new Button { Content = "전체 선택", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 6, 0) };
+        var all = new Button
+        {
+            Content = LocalizationCatalog.Text("전체 선택", "Select all"),
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(0, 0, 6, 0)
+        };
         all.Click += (_, _) => { foreach (var item in _items) item.CheckBox.IsChecked = true; UpdateSummary(); };
-        var none = new Button { Content = "전체 해제", Padding = new Thickness(10, 4, 10, 4) };
+        var none = new Button
+        {
+            Content = LocalizationCatalog.Text("전체 해제", "Clear selection"),
+            Padding = new Thickness(10, 4, 10, 4)
+        };
         none.Click += (_, _) => { foreach (var item in _items) item.CheckBox.IsChecked = false; UpdateSummary(); };
         selectButtons.Children.Add(all);
         selectButtons.Children.Add(none);
@@ -65,9 +78,9 @@ public sealed class SelectiveRestoreDialog : Window
         {
             var label = item.Kind switch
             {
-                ConfigSnapshotDiffKind.Changed => "변경됨 — snapshot 파일로 덮어쓰기",
-                ConfigSnapshotDiffKind.Added => "현재에만 존재 — 선택 시 삭제",
-                ConfigSnapshotDiffKind.Removed => "snapshot에만 존재 — 선택 시 복원",
+                ConfigSnapshotDiffKind.Changed => LocalizationCatalog.Text("변경됨 — snapshot 파일로 덮어쓰기", "Changed — overwrite with snapshot file"),
+                ConfigSnapshotDiffKind.Added => LocalizationCatalog.Text("현재에만 존재 — 선택 시 삭제", "Exists only in current configuration — delete when selected"),
+                ConfigSnapshotDiffKind.Removed => LocalizationCatalog.Text("snapshot에만 존재 — 선택 시 복원", "Exists only in snapshot — restore when selected"),
                 _ => item.Kind.ToString()
             };
             var check = new CheckBox
@@ -89,18 +102,34 @@ public sealed class SelectiveRestoreDialog : Window
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right
         };
-        var apply = new Button { Content = "선택 파일 복원", Padding = new Thickness(16, 5, 16, 5), Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var apply = new Button
+        {
+            Content = LocalizationCatalog.Text("선택 파일 복원", "Restore selected files"),
+            Padding = new Thickness(16, 5, 16, 5),
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true
+        };
         apply.Click += (_, _) =>
         {
             if (SelectedPaths.Count == 0)
             {
-                MessageBox.Show(this, "복원할 파일을 하나 이상 선택하세요.", "선택 설정 복원", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(
+                    this,
+                    LocalizationCatalog.Text("복원할 파일을 하나 이상 선택하세요.", "Select at least one file to restore."),
+                    LocalizationCatalog.Text("선택 설정 복원", "Selective configuration restore"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
             DialogResult = true;
             Close();
         };
-        var cancel = new Button { Content = "취소", Padding = new Thickness(16, 5, 16, 5), IsCancel = true };
+        var cancel = new Button
+        {
+            Content = LocalizationCatalog.Text("취소", "Cancel"),
+            Padding = new Thickness(16, 5, 16, 5),
+            IsCancel = true
+        };
         buttons.Children.Add(apply);
         buttons.Children.Add(cancel);
         Grid.SetRow(buttons, 2);
@@ -113,7 +142,9 @@ public sealed class SelectiveRestoreDialog : Window
     private void UpdateSummary()
     {
         var selected = _items.Count(item => item.CheckBox.IsChecked == true);
-        _summary.Text = $"변경 파일 {_items.Count:N0}개 / 복원 선택 {selected:N0}개";
+        _summary.Text = LocalizationCatalog.Text(
+            $"변경 파일 {_items.Count:N0}개 / 복원 선택 {selected:N0}개",
+            $"Changed files: {_items.Count:N0} / selected for restore: {selected:N0}");
     }
 
     private sealed record RestoreItem(string Path, CheckBox CheckBox);
