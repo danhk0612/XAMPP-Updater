@@ -2,10 +2,10 @@
 
 ## 목표
 
-Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB만** 안전하게 관리한다.
+Windows 11의 기존 XAMPP 설치를 대상으로 **Apache / PHP / MariaDB**, 그리고 XAMPP에 포함된 경우 **phpMyAdmin**을 안전하게 관리한다.
 
 핵심 우선순위는 **자동화된 안전한 업데이트 → 실패 시 자동 롤백 → 업데이트 후 문제 발생 시 설정 복원**이다.
-XAMPP 전체 재설치나 Node.js, Perl, Tomcat, phpMyAdmin 등 다른 구성요소 관리는 범위 밖이다.
+XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리는 범위 밖이다.
 
 ## Phase 1 — Foundation & Local Detection
 
@@ -126,7 +126,7 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat, phpMyAdmin 등 다른 구성요
 - [x] GitHub Release EXE + SHA256 게시
 - [x] 공개 `v0.1.0` Release
 - [x] 공개 `v0.1.1` Release
-- [x] `releases/latest` → `v0.1.1`
+- [x] 공개 `v0.1.2` Release
 - [x] 앱 자체 업데이트
   - GitHub latest 조회
   - 실제 다운로드 진행률/용량
@@ -138,6 +138,45 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat, phpMyAdmin 등 다른 구성요
 - [x] 실제 배포 EXE `v0.1.0` → `v0.1.1` 자체 업데이트 및 재실행 확인
 - [x] 진단 정보 ZIP 내보내기
 - [x] 공통 애플리케이션 아이콘을 EXE와 WPF 창에 적용
+
+## Phase 7 — Optional phpMyAdmin & Localization
+
+진행 중.
+
+### phpMyAdmin
+
+- [x] 선택한 XAMPP 루트에 `phpMyAdmin` 폴더가 있을 때만 UI 노출
+- [x] 설치 버전 탐지
+- [x] 공식 latest metadata 조회
+- [x] all-languages ZIP 다운로드
+- [x] 공식 SHA256 검증
+- [x] 현재 PHP/DB 최소 호환성 검사
+- [x] 공식 metadata 상 PHP 상한 초과 시 경고
+- [x] 기존 phpMyAdmin 전체 롤백 백업
+- [x] `config.inc.php`, `.htaccess`, `upload`, `save` 보존
+- [x] 새 패키지 staging/구조/버전 검증
+- [x] `config.inc.php` PHP 구문 검사
+- [x] 폴더 교체 및 실패 시 자동 원복
+- [x] 관리자 권한 재실행 후 자동 재개
+- [x] 공통 stage ID 기반 진행률/실제 다운로드 용량 표시
+- [x] 기존 전체 Build / Smoke tests / self-contained publish / EXE 검증 통과
+- [ ] 실제 XAMPP 설치에서 phpMyAdmin 업데이트 1회 이상 검증
+- [ ] 업데이트 후 실제 브라우저 로그인/DB 조회 확인
+
+### 한국어 / 영어 다국어화
+
+- [x] 리소스 기반 문자열 계층 추가
+- [x] 시스템 기본값 / 한국어 / English 모드
+- [x] Windows UI 언어 기반 시스템 기본 선택
+- [x] `%LOCALAPPDATA%\XAMPP-Updater\settings.json`에 사용자 선택 저장
+- [x] 언어 선택 UI 추가
+- [x] 기존 XAML 및 동적 WPF Text/Content/Header의 전역 현지화 기반
+- [x] 기존 `MessageBox.Show` 호출을 업데이트 로직 수정 없이 현지화하는 호환 래퍼
+- [x] 내부 stage ID는 영어 고정 유지
+- [x] Build / Smoke tests / self-contained publish / EXE 검증 통과
+- [ ] 실제 Windows 실행에서 한국어/영어 화면 육안 검증
+- [ ] 영어 모드에서 긴 문구/버튼 폭/줄바꿈 회귀 검증
+- [ ] 번역 누락 문구가 발견될 때 리소스/번역 사전 보강
 
 ## 현재 안정화 — XAMPP 범용성
 
