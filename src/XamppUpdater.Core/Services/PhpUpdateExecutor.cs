@@ -17,6 +17,8 @@ public interface IPhpUpdateExecutor
 
 public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
 {
+    private static readonly TimeSpan ApacheServiceTransitionTimeout = TimeSpan.FromSeconds(90);
+
     private readonly IWindowsServiceController _serviceController;
     private readonly IPhpIniMigrationService _iniMigrationService;
     private readonly IPhpExternalExtensionInstaller _externalExtensionInstaller;
@@ -90,7 +92,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
 
             if (apacheWasRunning && apacheServiceName is not null)
             {
-                await Task.Run(() => _serviceController.Stop(apacheServiceName, TimeSpan.FromSeconds(30)), cancellationToken);
+                await Task.Run(() => _serviceController.Stop(apacheServiceName, ApacheServiceTransitionTimeout), cancellationToken);
                 apacheStopped = true;
                 steps.Add($"Apache 서비스 중지: {apacheServiceName}");
             }
@@ -141,7 +143,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
 
             if (apacheWasRunning && apacheServiceName is not null)
             {
-                await Task.Run(() => _serviceController.Start(apacheServiceName, TimeSpan.FromSeconds(30)), cancellationToken);
+                await Task.Run(() => _serviceController.Start(apacheServiceName, ApacheServiceTransitionTimeout), cancellationToken);
                 apacheStopped = false;
                 steps.Add($"Apache 서비스 재시작: {apacheServiceName}");
             }
@@ -157,7 +159,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
             {
                 if (apacheServiceName is not null && string.Equals(_serviceController.GetState(apacheServiceName), "RUNNING", StringComparison.OrdinalIgnoreCase))
                 {
-                    _serviceController.Stop(apacheServiceName, TimeSpan.FromSeconds(30));
+                    _serviceController.Stop(apacheServiceName, ApacheServiceTransitionTimeout);
                 }
             }
             catch (Exception stopEx)
@@ -195,7 +197,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
             {
                 try
                 {
-                    _serviceController.Start(apacheServiceName, TimeSpan.FromSeconds(30));
+                    _serviceController.Start(apacheServiceName, ApacheServiceTransitionTimeout);
                     apacheStopped = false;
                     steps.Add("Apache 서비스 원상복구 완료");
                 }
@@ -213,7 +215,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
         {
             if (apacheStopped && apacheWasRunning && apacheServiceName is not null)
             {
-                try { _serviceController.Start(apacheServiceName, TimeSpan.FromSeconds(30)); } catch { }
+                try { _serviceController.Start(apacheServiceName, ApacheServiceTransitionTimeout); } catch { }
             }
         }
     }
