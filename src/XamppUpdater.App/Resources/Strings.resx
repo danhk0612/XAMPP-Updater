@@ -42,11 +42,14 @@
   <data name="Language_Korean" xml:space="preserve"><value>Korean</value></data>
   <data name="Language_English" xml:space="preserve"><value>English</value></data>
   <data name="Language_ChangeTitle" xml:space="preserve"><value>Language</value></data>
-  <data name="Language_RestartNotice" xml:space="preserve"><value>The language setting has been changed. Restart the application to apply it.</value></data>
+  <data name="Language_RestartNotice" xml:space="preserve"><value>The language setting has been changed. Restarting the application now.</value></data>
   <data name="Common_UpdateCompleted" xml:space="preserve"><value>Update completed</value></data>
   <data name="Common_UpdateFailed" xml:space="preserve"><value>Update failed</value></data>
   <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
   <data name="Common_Ok" xml:space="preserve"><value>OK</value></data>
   <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
   <data name="Common_No" xml:space="preserve"><value>No</value></data>
+  <data name="Action_CheckAppUpdate" xml:space="preserve"><value>Check for app updates</value></data>
+  <data name="Action_ExportDiagnostics" xml:space="preserve"><value>Export diagnostics</value></data>
+  <data name="Status_NoNewUpdate" xml:space="preserve"><value>No new update is available. Advanced information remains available.</value></data>
 </root>
