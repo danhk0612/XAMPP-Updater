@@ -38,6 +38,28 @@ public static class PhpStagingIniPathRewriter
         if (!string.Equals(finalForward, finalRoot, StringComparison.Ordinal))
             result = result.Replace(finalForward, stagingForward, StringComparison.OrdinalIgnoreCase);
 
+        // Some XAMPP php.ini files use drive-root-relative paths such as
+        // \xampp\php\ext rather than C:\xampp\php\ext. Windows resolves those
+        // against the current drive, which made staging validation load DLLs from
+        // the still-installed old PHP tree and produced false ABI/entry-point errors.
+        // Rebase those aliases to the absolute staging root as well.
+        if (OperatingSystem.IsWindows())
+        {
+            var driveRoot = Path.GetPathRoot(finalRoot);
+            if (!string.IsNullOrWhiteSpace(driveRoot) && finalRoot.Length > driveRoot.Length)
+            {
+                var relativeFromDrive = finalRoot[driveRoot.Length..]
+                    .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                if (!string.IsNullOrWhiteSpace(relativeFromDrive))
+                {
+                    var rootRelativeBackslash = "\\" + relativeFromDrive.Replace('/', '\\');
+                    var rootRelativeForward = "/" + relativeFromDrive.Replace('\\', '/');
+                    result = result.Replace(rootRelativeBackslash, stagingRoot, StringComparison.OrdinalIgnoreCase);
+                    result = result.Replace(rootRelativeForward, stagingForward, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+
         return result;
     }
 }
