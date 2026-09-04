@@ -17,7 +17,7 @@ public sealed class ConfigEntryMergeWindow : Window
 
     public ConfigEntryMergeWindow(IReadOnlyList<ConfigEntryMergeItem> items)
     {
-        Title = "설정 항목 선택 병합";
+        Title = LocalizationCatalog.Text("설정 항목 선택 병합", "Merge selected configuration entries");
         Width = 1050;
         Height = 720;
         MinWidth = 760;
@@ -29,9 +29,18 @@ public sealed class ConfigEntryMergeWindow : Window
         root.Children.Add(_summary);
 
         var buttons = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
-        var all = new Button { Content = "적용 가능 전체 선택", Padding = new Thickness(10, 5, 10, 5), Margin = new Thickness(0, 0, 8, 0) };
+        var all = new Button
+        {
+            Content = LocalizationCatalog.Text("적용 가능 전체 선택", "Select all applicable"),
+            Padding = new Thickness(10, 5, 10, 5),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
         all.Click += (_, _) => { foreach (var row in _rows.Where(x => x.Item.CanApply)) row.CheckBox.IsChecked = true; UpdateSummary(); };
-        var none = new Button { Content = "전체 해제", Padding = new Thickness(10, 5, 10, 5) };
+        var none = new Button
+        {
+            Content = LocalizationCatalog.Text("전체 해제", "Clear selection"),
+            Padding = new Thickness(10, 5, 10, 5)
+        };
         none.Click += (_, _) => { foreach (var row in _rows) row.CheckBox.IsChecked = false; UpdateSummary(); };
         buttons.Children.Add(all);
         buttons.Children.Add(none);
@@ -56,8 +65,12 @@ public sealed class ConfigEntryMergeWindow : Window
                 IsEnabled = item.CanApply,
                 Margin = new Thickness(8, 3, 0, 3),
                 Content = item.CanApply
-                    ? $"{item.DisplayName}    현재: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}"
-                    : $"[수동 확인] {item.DisplayName}    {item.Reason}"
+                    ? LocalizationCatalog.Text(
+                        $"{item.DisplayName}    현재: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}",
+                        $"{item.DisplayName}    Current: {Short(item.CurrentValue)}    ← snapshot: {Short(item.SnapshotValue)}")
+                    : LocalizationCatalog.Text(
+                        $"[수동 확인] {item.DisplayName}    {item.Reason}",
+                        $"[Manual review] {item.DisplayName}    {LocalizationCatalog.TranslateUserText(item.Reason)}")
             };
             check.Checked += (_, _) => UpdateSummary();
             check.Unchecked += (_, _) => UpdateSummary();
@@ -66,18 +79,34 @@ public sealed class ConfigEntryMergeWindow : Window
         }
 
         var bottom = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
-        var apply = new Button { Content = "선택 항목 적용", Padding = new Thickness(16, 6, 16, 6), Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var apply = new Button
+        {
+            Content = LocalizationCatalog.Text("선택 항목 적용", "Apply selected entries"),
+            Padding = new Thickness(16, 6, 16, 6),
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true
+        };
         apply.Click += (_, _) =>
         {
             if (Selections.Count == 0)
             {
-                MessageBox.Show(this, "적용할 설정 항목을 1개 이상 선택하세요.", "항목 병합", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(
+                    this,
+                    LocalizationCatalog.Text("적용할 설정 항목을 1개 이상 선택하세요.", "Select at least one configuration entry to apply."),
+                    LocalizationCatalog.Text("항목 병합", "Entry merge"),
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information);
                 return;
             }
             DialogResult = true;
             Close();
         };
-        var cancel = new Button { Content = "취소", Padding = new Thickness(16, 6, 16, 6), IsCancel = true };
+        var cancel = new Button
+        {
+            Content = LocalizationCatalog.Text("취소", "Cancel"),
+            Padding = new Thickness(16, 6, 16, 6),
+            IsCancel = true
+        };
         bottom.Children.Add(apply);
         bottom.Children.Add(cancel);
         DockPanel.SetDock(bottom, Dock.Bottom);
@@ -92,13 +121,14 @@ public sealed class ConfigEntryMergeWindow : Window
         var auto = _rows.Count(x => x.Item.CanApply);
         var conflicts = _rows.Count(x => !x.Item.CanApply);
         var selected = _rows.Count(x => x.Item.CanApply && x.CheckBox.IsChecked == true);
-        _summary.Text = $"변경 항목 { _rows.Count:N0}개 / 자동 적용 가능 {auto:N0}개 / 수동 확인 {conflicts:N0}개 / 선택 {selected:N0}개\n" +
-                        "자동 적용은 기존 줄의 값만 snapshot 값으로 교체하며 주석과 주변 구조는 유지합니다.";
+        _summary.Text = LocalizationCatalog.Text(
+            $"변경 항목 {_rows.Count:N0}개 / 자동 적용 가능 {auto:N0}개 / 수동 확인 {conflicts:N0}개 / 선택 {selected:N0}개\n자동 적용은 기존 줄의 값만 snapshot 값으로 교체하며 주석과 주변 구조는 유지합니다.",
+            $"Changed entries: {_rows.Count:N0} / auto-applicable: {auto:N0} / manual review: {conflicts:N0} / selected: {selected:N0}\nAutomatic application replaces only existing values with snapshot values while preserving comments and surrounding structure.");
     }
 
     private static string Short(string? value)
     {
-        if (value is null) return "(없음)";
+        if (value is null) return LocalizationCatalog.Text("(없음)", "(none)");
         var one = value.Replace("\r", " ").Replace("\n", " ");
         return one.Length <= 100 ? one : one[..100] + "…";
     }
