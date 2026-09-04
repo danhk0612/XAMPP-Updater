@@ -50,17 +50,15 @@ public partial class App : Application
             if (window is MainWindow mainWindow)
             {
                 mainWindow.InitializePhpMyAdminUi();
+                mainWindow.InitializePhpMyAdminBackupUi();
                 mainWindow.InitializeLocalizationUi();
                 mainWindow.InitializeConfigHistoryUi();
 
-                // StartupUri로 만들어진 정적 XAML과 위에서 동적으로 추가한 UI를
-                // 창 전체 기준으로 다시 적용해 Loaded 이벤트 순서와 무관하게 현지화한다.
                 LocalizationService.ApplyToTree(window);
 
                 await mainWindow.InspectStartupRootAsync();
                 await mainWindow.InitializeReleaseLifecycleAsync();
 
-                // 초기화 중 동적으로 갱신된 사용자 표시 문자열도 현재 언어로 보정한다.
                 LocalizationService.ApplyToTree(window);
 
                 var resume = AdministratorPrivilege.GetStartupResumeUpdate();
