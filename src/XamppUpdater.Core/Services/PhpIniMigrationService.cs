@@ -188,6 +188,11 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
 
         try
         {
+            if (TryResolvePhpRootRelative(configuredPath, oldPhpRoot, newPhpRoot, out var mapped))
+            {
+                return mapped;
+            }
+
             if (Path.IsPathFullyQualified(configuredPath) && !string.IsNullOrWhiteSpace(oldPhpRoot))
             {
                 var oldFull = Path.GetFullPath(oldPhpRoot);
@@ -213,6 +218,11 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
     {
         try
         {
+            if (TryResolvePhpRootRelative(configuredPath, oldPhpRoot, oldPhpRoot, out var mapped))
+            {
+                return File.Exists(mapped) ? mapped : null;
+            }
+
             var candidate = Path.IsPathFullyQualified(configuredPath)
                 ? Path.GetFullPath(configuredPath)
                 : Path.GetFullPath(Path.Combine(oldPhpRoot, configuredPath));
@@ -222,6 +232,41 @@ public sealed partial class PhpIniMigrationService : IPhpIniMigrationService
         {
             return null;
         }
+    }
+
+    private static bool TryResolvePhpRootRelative(
+        string configuredPath,
+        string sourcePhpRoot,
+        string destinationPhpRoot,
+        out string mapped)
+    {
+        mapped = string.Empty;
+        if (!OperatingSystem.IsWindows() || string.IsNullOrWhiteSpace(sourcePhpRoot) ||
+            string.IsNullOrWhiteSpace(destinationPhpRoot))
+            return false;
+
+        var normalized = configuredPath.Replace('/', '\\');
+        if (!normalized.StartsWith('\\') || normalized.StartsWith("\\\\", StringComparison.Ordinal))
+            return false;
+
+        var sourceRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(sourcePhpRoot));
+        var driveRoot = Path.GetPathRoot(sourceRoot);
+        if (string.IsNullOrWhiteSpace(driveRoot) || sourceRoot.Length <= driveRoot.Length)
+            return false;
+
+        var sourceFromDrive = sourceRoot[driveRoot.Length..].TrimStart('\\', '/');
+        var configuredFromDrive = normalized.TrimStart('\\');
+        if (!configuredFromDrive.Equals(sourceFromDrive, StringComparison.OrdinalIgnoreCase) &&
+            !configuredFromDrive.StartsWith(sourceFromDrive + "\\", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var relative = configuredFromDrive.Length == sourceFromDrive.Length
+            ? string.Empty
+            : configuredFromDrive[(sourceFromDrive.Length + 1)..];
+        mapped = string.IsNullOrEmpty(relative)
+            ? Path.GetFullPath(destinationPhpRoot)
+            : Path.GetFullPath(Path.Combine(destinationPhpRoot, relative));
+        return true;
     }
 
     private static bool IsPathInsideRoot(string path, string root)
