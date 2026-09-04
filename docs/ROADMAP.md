@@ -48,8 +48,14 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] ZIP 내부 PE 아키텍처/필수 실행 파일 검사
 - [x] 기존/신규 파일 및 설정 diff
 - [x] PHP 외부 extension PE/TS-NTS/loader 판정
+- [x] 정식 롤백 백업과 롤백 직전 안전 백업을 manifest에서 구분
+- [x] 현재 설치 버전에 직접 연결되는 정상 롤백 백업만 카탈로그에 노출
+- [x] 롤백 후보 manifest/파일 크기/SHA256 검증 및 MariaDB 논리 백업 필수화
+- [x] 안전 백업 7일/구성요소별 최근 3개 보존 정책
+- [x] schema 1/2 기존 백업 호환 유지
 
 추가 PGP 검증과 정적 ABI/메타데이터 강화는 현재 동작을 바꾸지 않고 `DEFERRED_HARDENING.md`의 후속 후보로 이동했다.
+백업/롤백 카탈로그 세부 정책은 `BACKUP_ROLLBACK_POLICY.md`에 정리한다.
 
 ## Phase 4 — Assisted Update Engine
 
@@ -102,6 +108,8 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] Apache/PHP/MariaDB 진행 callback 공통화
   - 공통 stage ID: BackupVerify / BeforeSnapshot / Execute / AfterSnapshot / Rollback / Failed / Completed
   - 기존 executor 순서/롤백 로직은 변경하지 않고 보고 계층만 통일
+- [x] Apache ↔ PHP 롤백 후 연동 검증 및 실패 시 롤백 직전 상태 자동 원복
+- [x] 실제 환경에서 Apache → PHP → MariaDB → phpMyAdmin 업데이트 후 MariaDB → Apache → PHP → phpMyAdmin 순서 롤백 검증
 
 ## Phase 5 — Config Compare / Restore
 
@@ -160,7 +168,7 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 - [x] 관리자 권한 재실행 후 자동 재개
 - [x] 공통 stage ID 기반 진행률/실제 다운로드 용량 표시
 - [x] 기존 전체 Build / Smoke tests / self-contained publish / EXE 검증 통과
-- [ ] 실제 XAMPP 설치에서 phpMyAdmin 업데이트 1회 이상 검증
+- [x] 실제 XAMPP 설치에서 phpMyAdmin 업데이트 및 롤백 검증
 - [ ] 업데이트 후 실제 브라우저 로그인/DB 조회 확인
 
 ### 한국어 / 영어 다국어화
