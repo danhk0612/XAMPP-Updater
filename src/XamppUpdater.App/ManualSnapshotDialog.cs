@@ -17,7 +17,9 @@ public sealed class ManualSnapshotDialog : Window
 
     public ManualSnapshotDialog(string componentName, string? initialNote = null, bool editMode = false)
     {
-        Title = editMode ? $"{componentName} snapshot 메모 수정" : $"{componentName} 수동 snapshot";
+        Title = editMode
+            ? LocalizationCatalog.Text($"{componentName} snapshot 메모 수정", $"Edit {componentName} snapshot note")
+            : LocalizationCatalog.Text($"{componentName} 수동 snapshot", $"Manual {componentName} snapshot");
         Width = 470;
         Height = 260;
         MinWidth = 420;
@@ -34,8 +36,12 @@ public sealed class ManualSnapshotDialog : Window
         var label = new TextBlock
         {
             Text = editMode
-                ? "snapshot 메모를 수정하세요. 비우면 메모가 제거됩니다."
-                : "이 snapshot을 구분할 메모를 입력하세요. 비워도 저장할 수 있습니다.",
+                ? LocalizationCatalog.Text(
+                    "snapshot 메모를 수정하세요. 비우면 메모가 제거됩니다.",
+                    "Edit the snapshot note. Leave it empty to remove the note.")
+                : LocalizationCatalog.Text(
+                    "이 snapshot을 구분할 메모를 입력하세요. 비워도 저장할 수 있습니다.",
+                    "Enter a note to identify this snapshot. You may leave it empty."),
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8)
         };
@@ -50,9 +56,20 @@ public sealed class ManualSnapshotDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 10, 0, 0)
         };
-        var save = new Button { Content = "저장", Padding = new Thickness(18, 5, 18, 5), Margin = new Thickness(0, 0, 8, 0), IsDefault = true };
+        var save = new Button
+        {
+            Content = LocalizationCatalog.Text("저장", "Save"),
+            Padding = new Thickness(18, 5, 18, 5),
+            Margin = new Thickness(0, 0, 8, 0),
+            IsDefault = true
+        };
         save.Click += (_, _) => { DialogResult = true; Close(); };
-        var cancel = new Button { Content = "취소", Padding = new Thickness(18, 5, 18, 5), IsCancel = true };
+        var cancel = new Button
+        {
+            Content = LocalizationCatalog.Text("취소", "Cancel"),
+            Padding = new Thickness(18, 5, 18, 5),
+            IsCancel = true
+        };
         buttons.Children.Add(save);
         buttons.Children.Add(cancel);
         Grid.SetRow(buttons, 2);
