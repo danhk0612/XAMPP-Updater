@@ -31,16 +31,7 @@ public sealed class BackupRetentionService : IBackupRetentionService
             try
             {
                 var manifest = JsonSerializer.Deserialize<BackupManifest>(File.ReadAllText(manifestPath));
-                if (manifest is null) continue;
-
-                // Schema 1/2 had no explicit Kind. Rollback-created safety backups can still be
-                // recognized conservatively because they describe a higher current version moving
-                // toward a lower rollback target. Normal updater backups describe old -> new.
-                var isLegacySafety = manifest.SchemaVersion < 3 &&
-                    Version.TryParse(manifest.CurrentVersion, out var current) &&
-                    Version.TryParse(manifest.TargetVersion, out var target) &&
-                    current > target;
-                if (manifest.Kind != BackupKind.Safety && !isLegacySafety) continue;
+                if (manifest is null || !IsSafetyBackup(manifest)) continue;
 
                 var manifestRoot = Path.GetDirectoryName(Path.GetFullPath(manifestPath));
                 if (manifestRoot is null) continue;
@@ -92,6 +83,19 @@ public sealed class BackupRetentionService : IBackupRetentionService
         }
 
         return new BackupRetentionResult(deleted, reclaimed, errors);
+    }
+
+    internal static bool IsSafetyBackup(BackupManifest manifest)
+    {
+        if (manifest.Kind == BackupKind.Safety) return true;
+        if (manifest.SchemaVersion >= 3) return false;
+
+        // Schema 1/2 had no explicit Kind. Rollback-created safety backups can still be
+        // recognized conservatively because they describe a higher current version moving
+        // toward a lower rollback target. Normal updater backups describe old -> new.
+        return Version.TryParse(manifest.CurrentVersion, out var current) &&
+               Version.TryParse(manifest.TargetVersion, out var target) &&
+               current > target;
     }
 
     private static string Normalize(string path)
