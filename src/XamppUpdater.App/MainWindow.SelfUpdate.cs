@@ -16,12 +16,15 @@ public partial class MainWindow
 
         var cleanupButton = panel.Children
             .OfType<Button>()
-            .FirstOrDefault(button => string.Equals(button.Content?.ToString(), "저장 데이터 정리", StringComparison.Ordinal));
+            .FirstOrDefault(button =>
+                string.Equals(button.Content?.ToString(), "저장 데이터 정리", StringComparison.Ordinal) ||
+                string.Equals(button.Content?.ToString(), LocalizationCatalog.TranslateUserText("저장 데이터 정리"), StringComparison.Ordinal));
         if (cleanupButton is null) return;
 
         var button = new Button
         {
-            Content = "앱 업데이트 확인",
+            Content = LocalizationCatalog.Text("앱 업데이트 확인", "Check for app updates"),
+            Tag = "AppUpdate",
             Margin = new Thickness(0, 0, 0, 5),
             Padding = new Thickness(8, 6, 8, 6)
         };
