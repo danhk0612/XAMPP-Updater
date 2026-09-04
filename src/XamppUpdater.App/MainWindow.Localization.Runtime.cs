@@ -50,7 +50,7 @@ public partial class MainWindow
         void Apply()
         {
             var current = block.Text;
-            var translated = LocalizationCatalog.TranslateUserText(current);
+            var translated = ExtendedLocalization.TranslateText(current);
             if (!string.Equals(current, translated, StringComparison.Ordinal))
                 block.Text = translated;
         }
@@ -65,7 +65,7 @@ public partial class MainWindow
         public static readonly LocalizedDisplayValueConverter Instance = new();
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-            LocalizationCatalog.TranslateDisplayValue(value);
+            ExtendedLocalization.TranslateText(LocalizationCatalog.TranslateDisplayValue(value));
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
             Binding.DoNothing;
