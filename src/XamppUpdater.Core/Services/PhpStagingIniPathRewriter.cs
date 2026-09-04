@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace XamppUpdater.Core.Services;
 
 /// <summary>
@@ -18,6 +20,7 @@ public static class PhpStagingIniPathRewriter
 
         var source = File.ReadAllText(sourceIniPath);
         var rewritten = RewriteText(source, finalPhpRoot, stagingPhpRoot);
+        MaterializeBrowscap(rewritten, finalPhpRoot, stagingPhpRoot);
         var destination = Path.Combine(stagingPhpRoot, "php.ini.xampp-updater-validation");
         File.WriteAllText(destination, rewritten);
         return destination;
@@ -61,5 +64,49 @@ public static class PhpStagingIniPathRewriter
         }
 
         return result;
+    }
+
+    private static void MaterializeBrowscap(string validationIni, string finalPhpRoot, string stagingPhpRoot)
+    {
+        var match = Regex.Match(
+            validationIni,
+            @"(?im)^\s*browscap\s*=\s*(?<value>[^;#]+?)\s*$",
+            RegexOptions.IgnoreCase);
+        if (!match.Success) return;
+
+        var configured = match.Groups["value"].Value.Trim().Trim('"', '\'');
+        if (string.IsNullOrWhiteSpace(configured)) return;
+
+        try
+        {
+            var stagingRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(stagingPhpRoot));
+            var finalRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(finalPhpRoot));
+            var destination = Path.IsPathFullyQualified(configured)
+                ? Path.GetFullPath(configured)
+                : Path.GetFullPath(Path.Combine(stagingRoot, configured));
+
+            if (!IsInsideRoot(destination, stagingRoot) || File.Exists(destination)) return;
+
+            var relative = Path.GetRelativePath(stagingRoot, destination);
+            var source = Path.GetFullPath(Path.Combine(finalRoot, relative));
+            if (!IsInsideRoot(source, finalRoot) || !File.Exists(source)) return;
+
+            var directory = Path.GetDirectoryName(destination);
+            if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+            File.Copy(source, destination, overwrite: true);
+        }
+        catch
+        {
+            // If the source is genuinely missing, leave the directive untouched so
+            // the runtime validator reports the real configuration problem.
+        }
+    }
+
+    private static bool IsInsideRoot(string path, string root)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        return fullPath.Equals(fullRoot, StringComparison.OrdinalIgnoreCase) ||
+               fullPath.StartsWith(fullRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
     }
 }
