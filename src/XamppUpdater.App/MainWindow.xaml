@@ -70,21 +70,26 @@
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" BorderBrush="#D8D8D8" BorderThickness="1" CornerRadius="6" Padding="10">
-                <StackPanel>
-                    <TextBlock Text="구성요소" FontWeight="SemiBold" Margin="4,2,0,8" />
-                    <Button x:Name="ApacheNavButton" Content="Apache" Tag="Apache" Height="38" Margin="0,0,0,5" Click="ComponentNav_Click" />
-                    <Button x:Name="PhpNavButton" Content="PHP" Tag="Php" Height="38" Margin="0,0,0,5" Click="ComponentNav_Click" />
-                    <Button x:Name="MariaDbNavButton" Content="MariaDB" Tag="MariaDb" Height="38" Click="ComponentNav_Click" />
-                    <Separator Margin="0,14,0,12" />
-                    <TextBlock Text="관리" FontWeight="SemiBold" Margin="4,0,0,8" />
-                    <Button Content="설정 이력" Margin="0,0,0,5" Padding="8,6" Click="OpenSelectedConfigHistory_Click" />
-                    <Button Content="저장 데이터 정리" Margin="0,0,0,5" Padding="8,6" Click="CleanupButton_Click" />
-                    <Separator Margin="0,10,0,10" />
-                    <TextBlock Text="탐색기로 열기" Foreground="DimGray" Margin="4,0,0,6" />
-                    <Button Content="롤백 백업" Tag="Backups" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
-                    <Button Content="설정 이력 폴더" Tag="ConfigHistory" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
-                    <Button Content="캐시/임시 데이터" Tag="LocalRoot" Padding="8,5" Click="OpenStorageFolder_Click" />
-                </StackPanel>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalFirst"
+                              CanContentScroll="False">
+                    <StackPanel x:Name="LeftNavigationPanel">
+                        <TextBlock Text="구성요소" FontWeight="SemiBold" Margin="4,2,0,8" />
+                        <Button x:Name="ApacheNavButton" Content="Apache" Tag="Apache" Height="38" Margin="0,0,0,5" Click="ComponentNav_Click" />
+                        <Button x:Name="PhpNavButton" Content="PHP" Tag="Php" Height="38" Margin="0,0,0,5" Click="ComponentNav_Click" />
+                        <Button x:Name="MariaDbNavButton" Content="MariaDB" Tag="MariaDb" Height="38" Click="ComponentNav_Click" />
+                        <Separator Margin="0,14,0,12" />
+                        <TextBlock Text="관리" FontWeight="SemiBold" Margin="4,0,0,8" />
+                        <Button Content="설정 이력" Margin="0,0,0,5" Padding="8,6" Click="OpenSelectedConfigHistory_Click" />
+                        <Button Content="저장 데이터 정리" Margin="0,0,0,5" Padding="8,6" Click="CleanupButton_Click" />
+                        <Separator Margin="0,10,0,10" />
+                        <TextBlock Text="탐색기로 열기" Foreground="DimGray" Margin="4,0,0,6" />
+                        <Button Content="롤백 백업" Tag="Backups" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
+                        <Button Content="설정 이력 폴더" Tag="ConfigHistory" Margin="0,0,0,4" Padding="8,5" Click="OpenStorageFolder_Click" />
+                        <Button Content="캐시/임시 데이터" Tag="LocalRoot" Padding="8,5" Click="OpenStorageFolder_Click" />
+                    </StackPanel>
+                </ScrollViewer>
             </Border>
 
             <Border Grid.Column="2" BorderBrush="#D8D8D8" BorderThickness="1" CornerRadius="6" Padding="18">
