@@ -36,6 +36,10 @@ public sealed class UpdateBackupService : IUpdateBackupService
                 "MariaDB가 실행 중인 상태에서는 data 디렉터리 물리 백업을 만들지 않습니다. 서비스 중지와 논리 백업 후 진행해야 합니다.");
         }
 
+        var effectiveKind = kind == BackupKind.Rollback && IsRollbackSafetyDirection(preflight)
+            ? BackupKind.Safety
+            : kind;
+
         var backupRoot = preflight.BackupDestination;
         var filesRoot = Path.Combine(backupRoot, "files");
         Directory.CreateDirectory(filesRoot);
@@ -78,12 +82,20 @@ public sealed class UpdateBackupService : IUpdateBackupService
             preflight.ProcessRunning,
             manifestFiles,
             logicalBackup,
-            kind);
+            effectiveKind);
 
         var manifestPath = Path.Combine(backupRoot, "manifest.json");
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions));
 
-        return new BackupResult(manifest, manifestPath, copiedBytes, manifestFiles.Count);
+        var result = new BackupResult(manifest, manifestPath, copiedBytes, manifestFiles.Count);
+        if (effectiveKind == BackupKind.Safety)
+        {
+            // Safety backups are temporary recovery aids. Cleanup is deliberately best-effort and
+            // never affects formal rollback backups.
+            try { new BackupRetentionService().CleanupSafetyBackups(); } catch { }
+        }
+
+        return result;
     }
 
     internal static IEnumerable<string> EnumerateStableBackupFiles(string componentRoot, XamppComponentType type)
@@ -103,4 +115,9 @@ public sealed class UpdateBackupService : IUpdateBackupService
         using var stream = File.OpenRead(filePath);
         return Convert.ToHexString(SHA256.HashData(stream));
     }
+
+    private static bool IsRollbackSafetyDirection(UpdatePreflightReport preflight) =>
+        Version.TryParse(preflight.CurrentVersion, out var current) &&
+        Version.TryParse(preflight.TargetVersion, out var target) &&
+        current > target;
 }
