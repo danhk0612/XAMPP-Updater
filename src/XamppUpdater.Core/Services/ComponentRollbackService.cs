@@ -86,6 +86,12 @@ public sealed class ComponentRollbackService : IComponentRollbackService
                 ReconcileApachePhpSapi(installation.RootPath, componentRoot);
                 steps.Add("복원된 PHP 버전에 맞게 Apache PHP SAPI 설정 복원 완료");
             }
+            else if (manifest.Type == XamppComponentType.Apache)
+            {
+                var currentPhpRoot = Path.Combine(installation.RootPath, "php");
+                ReconcileApachePhpSapi(installation.RootPath, currentPhpRoot);
+                steps.Add("복원된 Apache 설정을 현재 PHP 버전에 맞게 PHP SAPI 연동 보정 완료");
+            }
 
             await ValidateAsync(manifest.Type, componentRoot, cancellationToken);
             if (manifest.Type == XamppComponentType.Php)
@@ -154,7 +160,7 @@ public sealed class ComponentRollbackService : IComponentRollbackService
         var moduleDll = Directory.EnumerateFiles(phpRoot, "php*apache2_4.dll", SearchOption.TopDirectoryOnly)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault()
-            ?? throw new FileNotFoundException("복원된 PHP에서 Apache 2.4 module DLL을 찾을 수 없습니다.");
+            ?? throw new FileNotFoundException("현재 PHP에서 Apache 2.4 module DLL을 찾을 수 없습니다.");
         var tsDll = Directory.EnumerateFiles(phpRoot, "php*ts.dll", SearchOption.TopDirectoryOnly)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
             .FirstOrDefault();
@@ -165,11 +171,18 @@ public sealed class ComponentRollbackService : IComponentRollbackService
         var moduleApachePath = ToApachePath(moduleDll);
         var tsApachePath = tsDll is null ? null : ToApachePath(tsDll);
 
-        var touched = false;
+        var foundSapiDirective = false;
         foreach (var file in Directory.EnumerateFiles(confRoot, "*.conf", SearchOption.AllDirectories))
         {
             var original = File.ReadAllText(file);
             if (!original.Contains("php", StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (Regex.IsMatch(
+                    original,
+                    @"(?im)^\s*LoadModule\s+\S+\s+[^\r\n]*php\d*apache2_4\.dll[^\r\n]*"))
+            {
+                foundSapiDirective = true;
+            }
 
             var updated = Regex.Replace(
                 original,
@@ -178,6 +191,13 @@ public sealed class ComponentRollbackService : IComponentRollbackService
 
             if (tsApachePath is not null)
             {
+                if (Regex.IsMatch(
+                        updated,
+                        @"(?im)^\s*LoadFile\s+[^\r\n]*php\d*ts\.dll[^\r\n]*"))
+                {
+                    foundSapiDirective = true;
+                }
+
                 updated = Regex.Replace(
                     updated,
                     @"(?im)^\s*LoadFile\s+[^\r\n]*php\d*ts\.dll[^\r\n]*",
@@ -187,14 +207,11 @@ public sealed class ComponentRollbackService : IComponentRollbackService
             updated = Regex.Replace(updated, @"\bphp(?:\d+)?_module\b", moduleName, RegexOptions.IgnoreCase);
 
             if (!string.Equals(original, updated, StringComparison.Ordinal))
-            {
                 File.WriteAllText(file, updated);
-                touched = true;
-            }
         }
 
-        if (!touched)
-            throw new InvalidOperationException("Apache 설정에서 PHP SAPI 연동 지시어를 찾지 못해 롤백 버전에 맞게 갱신할 수 없습니다.");
+        if (!foundSapiDirective)
+            throw new InvalidOperationException("Apache 설정에서 PHP SAPI 연동 지시어를 찾지 못해 현재 PHP에 맞게 갱신할 수 없습니다.");
     }
 
     private static Dictionary<string, string> SnapshotApachePhpConfigs(string xamppRoot)
