@@ -128,7 +128,7 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
                 if (trimmed.StartsWith('#')) continue;
                 var match = Regex.Match(
                     line,
-                    @"^\s*LoadModule\s+php(?:\d+)?_module\s+(?<path>\"[^\"]+\"|\S*php\d*apache2_4\.dll\S*)\s*$",
+                    "^\\s*LoadModule\\s+php(?:\\d+)?_module\\s+(?<path>\"[^\"]+\"|\\S*php\\d*apache2_4\\.dll\\S*)\\s*$",
                     RegexOptions.IgnoreCase);
                 if (!match.Success) continue;
 
