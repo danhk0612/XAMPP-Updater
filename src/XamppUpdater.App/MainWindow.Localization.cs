@@ -41,11 +41,11 @@ public partial class MainWindow
         _languageComboBox.SelectedItem = options.First(item => item.Mode == LocalizationService.Mode);
         _languageComboBox.SelectionChanged += LanguageComboBox_SelectionChanged;
 
-        var componentAnchor = _phpMyAdminNavButton ?? MariaDbNavButton;
-        var insertIndex = navigation.Children.IndexOf(componentAnchor) + 1;
-        navigation.Children.Insert(insertIndex++, separator);
-        navigation.Children.Insert(insertIndex++, label);
-        navigation.Children.Insert(insertIndex, _languageComboBox);
+        // Keep language settings semantically at the bottom. The sidebar itself is scrollable,
+        // so adding this section never makes the management/storage actions unreachable.
+        navigation.Children.Add(separator);
+        navigation.Children.Add(label);
+        navigation.Children.Add(_languageComboBox);
     }
 
     private void LanguageComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
