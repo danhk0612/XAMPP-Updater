@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace XamppUpdater.Core.Models;
 
 public sealed record UpdateTargetCatalog(
@@ -16,7 +18,25 @@ public sealed record UpdateTargetOption(
     string? PackageFileName = null,
     bool IsEol = false)
 {
-    public string DisplayText => $"{Version} — {Label}{(IsEol ? " [EOL]" : string.Empty)}";
+    public string DisplayText => $"{Version} — {DisplayLabel}{(IsEol ? " [EOL]" : string.Empty)}";
+
+    private string DisplayLabel
+    {
+        get
+        {
+            if (!CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("en", StringComparison.OrdinalIgnoreCase))
+                return Label;
+
+            return Label
+                .Replace("현재 버전 / 업데이트 없음", "Current version / no update", StringComparison.Ordinal)
+                .Replace("현재 계열 추천", "Recommended for current series", StringComparison.Ordinal)
+                .Replace("XAMPP 공식 기준", "XAMPP official baseline", StringComparison.Ordinal)
+                .Replace("업데이트 없음", "No update", StringComparison.Ordinal)
+                .Replace("현재 버전", "Current version", StringComparison.Ordinal)
+                .Replace("최신", "Latest", StringComparison.Ordinal)
+                .Replace("계열", "series", StringComparison.Ordinal);
+        }
+    }
 }
 
 public enum UpdateTargetSource
