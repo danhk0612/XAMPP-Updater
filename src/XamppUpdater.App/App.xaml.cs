@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
@@ -26,6 +27,10 @@ public partial class App : Application
             typeof(FrameworkElement),
             FrameworkElement.LoadedEvent,
             new RoutedEventHandler(ApplyLocalization));
+        EventManager.RegisterClassHandler(
+            typeof(ContextMenu),
+            ContextMenu.OpenedEvent,
+            new RoutedEventHandler(ApplyContextMenuLocalization));
 
         base.OnStartup(e);
 
@@ -50,6 +55,7 @@ public partial class App : Application
             if (window is MainWindow mainWindow)
             {
                 mainWindow.InitializePhpMyAdminUi();
+                mainWindow.InitializePhpMyAdminAvailabilityUi();
                 mainWindow.InitializePhpMyAdminRollbackUi();
                 mainWindow.InitializeLocalizationUi();
                 mainWindow.InitializeRuntimeLocalizationUi();
@@ -85,6 +91,7 @@ public partial class App : Application
         {
             LocalizationService.ApplyToElement(element);
             LocalizationCatalog.ApplyToElement(element);
+            ExtendedLocalization.ApplyToElement(element);
             ConfigHistoryComboLocalization.Apply(element);
         }
     }
@@ -95,7 +102,14 @@ public partial class App : Application
         {
             LocalizationService.ApplyToTree(window);
             LocalizationCatalog.ApplyToElement(window);
+            ExtendedLocalization.ApplyToElement(window);
         }
+    }
+
+    private static void ApplyContextMenuLocalization(object sender, RoutedEventArgs e)
+    {
+        if (sender is ContextMenu menu)
+            PopupLocalization.Apply(menu);
     }
 
     private static void ApplyWindowIcon(object sender, RoutedEventArgs e)
