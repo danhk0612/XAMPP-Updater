@@ -202,7 +202,13 @@ internal static class LocalizationCatalog
         if (string.IsNullOrEmpty(text) || !LocalizationService.IsEnglish) return text ?? string.Empty;
         if (ExactEnglish.TryGetValue(text, out var exact)) return exact;
 
-        var translated = LocalizationService.Translate(text);
+        // Apply the specific phrase catalog first so broad fallback replacements do not
+        // split a Korean phrase into a half-translated sentence.
+        var translated = text;
+        foreach (var (korean, english) in PhraseEnglish)
+            translated = translated.Replace(korean, english, StringComparison.Ordinal);
+
+        translated = LocalizationService.Translate(translated);
         if (ExactEnglish.TryGetValue(translated, out exact)) return exact;
 
         foreach (var (korean, english) in PhraseEnglish)
