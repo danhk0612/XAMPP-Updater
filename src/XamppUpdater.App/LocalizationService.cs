@@ -26,6 +26,13 @@ internal static partial class LocalizationService
         "XAMPP-Updater",
         "settings.json");
 
+    private static readonly DependencyProperty LocalizationWatchRegisteredProperty =
+        DependencyProperty.RegisterAttached(
+            "LocalizationWatchRegistered",
+            typeof(bool),
+            typeof(LocalizationService),
+            new PropertyMetadata(false));
+
     private static readonly Dictionary<string, string> SourceKeys = new(StringComparer.Ordinal)
     {
         ["Apache, PHP, MariaDB를 안전하게 업데이트하고 실패 시 자동 복원합니다."] = "Main_Subtitle",
@@ -66,7 +73,10 @@ internal static partial class LocalizationService
         ["취소"] = "Common_Cancel",
         ["확인"] = "Common_Ok",
         ["예"] = "Common_Yes",
-        ["아니요"] = "Common_No"
+        ["아니요"] = "Common_No",
+        ["앱 업데이트 확인"] = "Action_CheckAppUpdate",
+        ["진단 정보 내보내기"] = "Action_ExportDiagnostics",
+        ["새 업데이트가 없습니다. 고급 정보는 계속 확인할 수 있습니다."] = "Status_NoNewUpdate"
     };
 
     private static readonly (string Korean, string English)[] PhraseReplacements =
@@ -78,6 +88,10 @@ internal static partial class LocalizationService
         ("업데이트 실패", "Update failed"),
         ("업데이트 준비", "Update preparation"),
         ("업데이트 중", "Updating"),
+        ("새 업데이트가 없습니다", "No new update is available"),
+        ("고급 정보는 계속 확인할 수 있습니다", "Advanced information remains available"),
+        ("온라인 확인 완료", "Online check completed"),
+        ("계열별 선택 버전", "release-line options"),
         ("자동 복원", "automatic restore"),
         ("자동 롤백", "automatic rollback"),
         ("롤백 백업", "rollback backup"),
@@ -156,10 +170,14 @@ internal static partial class LocalizationService
         if (SourceKeys.TryGetValue(text, out var key)) return Get(key);
         if (!ContainsHangul(text)) return text;
 
-        var translated = text;
+        var translated = RollbackVersionRegex().Replace(
+            text,
+            match => $"Rollback to {match.Groups["version"].Value}");
+
         foreach (var (korean, english) in PhraseReplacements)
             translated = translated.Replace(korean, english, StringComparison.Ordinal);
 
+        translated = CountSuffixRegex().Replace(translated, "${count} items");
         translated = NormalizeEnglishPunctuationRegex().Replace(translated, ": ");
         return translated;
     }
@@ -177,19 +195,25 @@ internal static partial class LocalizationService
                 TranslateProperty(textBox, TextBox.TextProperty);
                 Watch(textBox, TextBox.TextProperty);
                 break;
-            case ContentControl contentControl when contentControl.Content is string:
-                TranslateProperty(contentControl, ContentControl.ContentProperty);
-                Watch(contentControl, ContentControl.ContentProperty);
-                break;
             case HeaderedContentControl headered when headered.Header is string:
                 TranslateProperty(headered, HeaderedContentControl.HeaderProperty);
                 Watch(headered, HeaderedContentControl.HeaderProperty);
+                break;
+            case ContentControl contentControl when contentControl.Content is string:
+                TranslateProperty(contentControl, ContentControl.ContentProperty);
+                Watch(contentControl, ContentControl.ContentProperty);
                 break;
             case Window window:
                 TranslateProperty(window, Window.TitleProperty);
                 Watch(window, Window.TitleProperty);
                 break;
         }
+    }
+
+    public static void ApplyToTree(DependencyObject root)
+    {
+        if (!IsEnglish) return;
+        ApplyToTreeCore(root, new HashSet<DependencyObject>());
     }
 
     public static void SaveMode(AppLanguageMode mode)
@@ -237,6 +261,24 @@ internal static partial class LocalizationService
             : CultureInfo.GetCultureInfo("en-US")
     };
 
+    private static void ApplyToTreeCore(DependencyObject current, HashSet<DependencyObject> visited)
+    {
+        if (!visited.Add(current)) return;
+
+        if (current is FrameworkElement element)
+        {
+            ApplyToElement(element);
+        }
+
+        foreach (var child in LogicalTreeHelper.GetChildren(current))
+        {
+            if (child is DependencyObject dependencyObject)
+            {
+                ApplyToTreeCore(dependencyObject, visited);
+            }
+        }
+    }
+
     private static bool ContainsHangul(string text) => text.Any(ch => ch is >= '\uAC00' and <= '\uD7A3');
 
     private static void TranslateProperty(DependencyObject target, DependencyProperty property)
@@ -248,10 +290,19 @@ internal static partial class LocalizationService
 
     private static void Watch(DependencyObject target, DependencyProperty property)
     {
+        if ((bool)target.GetValue(LocalizationWatchRegisteredProperty)) return;
+
         var descriptor = DependencyPropertyDescriptor.FromProperty(property, target.GetType());
         if (descriptor is null) return;
         descriptor.AddValueChanged(target, (_, _) => TranslateProperty(target, property));
+        target.SetValue(LocalizationWatchRegisteredProperty, true);
     }
+
+    [GeneratedRegex(@"(?<version>\d+(?:\.\d+){1,3})로\s*롤백")]
+    private static partial Regex RollbackVersionRegex();
+
+    [GeneratedRegex(@"(?<count>\d+)개")]
+    private static partial Regex CountSuffixRegex();
 
     [GeneratedRegex(@"\s*:\s*")]
     private static partial Regex NormalizeEnglishPunctuationRegex();
