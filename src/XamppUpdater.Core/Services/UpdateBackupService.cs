@@ -6,7 +6,10 @@ namespace XamppUpdater.Core.Services;
 
 public interface IUpdateBackupService
 {
-    BackupResult CreateBackup(UpdatePreflightReport preflight, LogicalBackupManifest? logicalBackup = null);
+    BackupResult CreateBackup(
+        UpdatePreflightReport preflight,
+        LogicalBackupManifest? logicalBackup = null,
+        BackupKind kind = BackupKind.Rollback);
 }
 
 public sealed class UpdateBackupService : IUpdateBackupService
@@ -16,7 +19,10 @@ public sealed class UpdateBackupService : IUpdateBackupService
         WriteIndented = true
     };
 
-    public BackupResult CreateBackup(UpdatePreflightReport preflight, LogicalBackupManifest? logicalBackup = null)
+    public BackupResult CreateBackup(
+        UpdatePreflightReport preflight,
+        LogicalBackupManifest? logicalBackup = null,
+        BackupKind kind = BackupKind.Rollback)
     {
         if (!Directory.Exists(preflight.ComponentRoot))
         {
@@ -59,7 +65,7 @@ public sealed class UpdateBackupService : IUpdateBackupService
 
         var xamppRoot = Directory.GetParent(preflight.ComponentRoot)?.FullName ?? preflight.ComponentRoot;
         var manifest = new BackupManifest(
-            2,
+            3,
             DateTimeOffset.Now,
             preflight.Type,
             xamppRoot,
@@ -71,7 +77,8 @@ public sealed class UpdateBackupService : IUpdateBackupService
             preflight.ServiceState,
             preflight.ProcessRunning,
             manifestFiles,
-            logicalBackup);
+            logicalBackup,
+            kind);
 
         var manifestPath = Path.Combine(backupRoot, "manifest.json");
         File.WriteAllText(manifestPath, JsonSerializer.Serialize(manifest, JsonOptions));
