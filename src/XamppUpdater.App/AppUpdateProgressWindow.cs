@@ -17,15 +17,20 @@ internal sealed class AppUpdateProgressWindow : Window
     public bool RestartNowRequested { get; private set; }
     public event EventHandler? CancelRequested;
 
+    private static string L(string korean, string english) => LocalizationCatalog.Text(korean, english);
+
     public AppUpdateProgressWindow(Window owner, Version currentVersion, Version targetVersion)
     {
         Owner = owner;
-        Title = "XAMPP Updater 앱 업데이트";
+        Title = L("XAMPP Updater 앱 업데이트", "XAMPP Updater - App update");
         Width = 520;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ShowInTaskbar = false;
+
+        var current = currentVersion.ToString(3);
+        var target = targetVersion.ToString(3);
 
         var root = new Grid { Margin = new Thickness(20) };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -35,7 +40,9 @@ internal sealed class AppUpdateProgressWindow : Window
 
         _messageText = new TextBlock
         {
-            Text = $"XAMPP Updater {targetVersion.ToString(3)} 다운로드 중",
+            Text = L(
+                $"XAMPP Updater {target} 다운로드 중",
+                $"Downloading XAMPP Updater {target}"),
             FontSize = 17,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap
@@ -46,7 +53,9 @@ internal sealed class AppUpdateProgressWindow : Window
         {
             Margin = new Thickness(0, 8, 0, 0),
             Foreground = System.Windows.Media.Brushes.DimGray,
-            Text = $"현재 {currentVersion.ToString(3)} → 새 버전 {targetVersion.ToString(3)}",
+            Text = L(
+                $"현재 {current} → 새 버전 {target}",
+                $"Current {current} → New version {target}"),
             TextWrapping = TextWrapping.Wrap
         };
         Grid.SetRow(_detailText, 1);
@@ -69,13 +78,18 @@ internal sealed class AppUpdateProgressWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 16, 0, 0)
         };
-        _cancelButton = new Button { Content = "취소", MinWidth = 90, Padding = new Thickness(12, 6, 12, 6) };
+        _cancelButton = new Button
+        {
+            Content = L("취소", "Cancel"),
+            MinWidth = 90,
+            Padding = new Thickness(12, 6, 12, 6)
+        };
         _cancelButton.Click += (_, _) => RequestCancel();
         buttons.Children.Add(_cancelButton);
 
         _restartNowButton = new Button
         {
-            Content = "지금 재시작",
+            Content = L("지금 재시작", "Restart now"),
             MinWidth = 110,
             Padding = new Thickness(12, 6, 12, 6),
             Visibility = Visibility.Collapsed
@@ -84,7 +98,9 @@ internal sealed class AppUpdateProgressWindow : Window
         {
             RestartNowRequested = true;
             _restartNowButton.IsEnabled = false;
-            _messageText.Text = "앱을 재시작하여 업데이트를 적용합니다.";
+            _messageText.Text = L(
+                "앱을 재시작하여 업데이트를 적용합니다.",
+                "Restarting the app to apply the update.");
         };
         buttons.Children.Add(_restartNowButton);
         Grid.SetRow(buttons, 3);
@@ -105,15 +121,20 @@ internal sealed class AppUpdateProgressWindow : Window
         else
         {
             _progressBar.IsIndeterminate = true;
-            _detailText.Text = $"{FormatBytes(progress.BytesReceived)} 다운로드됨";
+            var downloaded = FormatBytes(progress.BytesReceived);
+            _detailText.Text = L($"{downloaded} 다운로드됨", $"{downloaded} downloaded");
         }
     }
 
     public void BeginVerification()
     {
         _cancelButton.IsEnabled = false;
-        _messageText.Text = "다운로드 완료. SHA256을 검증하는 중입니다.";
-        _detailText.Text = "이 단계부터는 업데이트를 취소할 수 없습니다.";
+        _messageText.Text = L(
+            "다운로드 완료. SHA256을 검증하는 중입니다.",
+            "Download complete. Verifying SHA256.");
+        _detailText.Text = L(
+            "이 단계부터는 업데이트를 취소할 수 없습니다.",
+            "The update can no longer be canceled after this stage.");
         _progressBar.IsIndeterminate = true;
     }
 
@@ -123,8 +144,14 @@ internal sealed class AppUpdateProgressWindow : Window
         _restartNowButton.Visibility = Visibility.Visible;
         _progressBar.IsIndeterminate = false;
         _progressBar.Value = 100;
-        _messageText.Text = "SHA256 검증 완료. 업데이트를 적용할 준비가 되었습니다.";
-        _detailText.Text = $"{seconds}초 후 자동으로 재시작합니다.";
+        _messageText.Text = L(
+            "SHA256 검증 완료. 업데이트를 적용할 준비가 되었습니다.",
+            "SHA256 verification complete. Ready to apply the update.");
+        _detailText.Text = L(
+            $"{seconds}초 후 자동으로 재시작합니다.",
+            seconds == 1
+                ? "Automatically restarting in 1 second."
+                : $"Automatically restarting in {seconds} seconds.");
     }
 
     public void AllowShutdown()
@@ -143,8 +170,12 @@ internal sealed class AppUpdateProgressWindow : Window
         if (_cancelSignaled || !_cancelButton.IsEnabled) return;
         _cancelSignaled = true;
         _cancelButton.IsEnabled = false;
-        _messageText.Text = "다운로드를 취소하는 중입니다.";
-        _detailText.Text = "현재 실행 파일은 변경되지 않습니다.";
+        _messageText.Text = L(
+            "다운로드를 취소하는 중입니다.",
+            "Canceling the download.");
+        _detailText.Text = L(
+            "현재 실행 파일은 변경되지 않습니다.",
+            "The current executable will not be changed.");
         CancelRequested?.Invoke(this, EventArgs.Empty);
     }
 
