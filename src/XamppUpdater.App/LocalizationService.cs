@@ -36,6 +36,7 @@ internal static partial class LocalizationService
     private static readonly Dictionary<string, string> SourceKeys = new(StringComparer.Ordinal)
     {
         ["Apache, PHP, MariaDB를 안전하게 업데이트하고 실패 시 자동 복원합니다."] = "Main_Subtitle",
+        ["Apache, PHP, MariaDB, phpMyAdmin을 안전하게 업데이트하고 실패 시 자동 복원합니다."] = "Main_Subtitle",
         ["XAMPP 경로"] = "Main_XamppPath",
         ["찾아보기"] = "Common_Browse",
         ["XAMPP 설치 경로를 확인하는 중..."] = "Status_InspectingXampp",
@@ -79,44 +80,108 @@ internal static partial class LocalizationService
         ["새 업데이트가 없습니다. 고급 정보는 계속 확인할 수 있습니다."] = "Status_NoNewUpdate"
     };
 
+    private static readonly Dictionary<string, string> ExactEnglish = new(StringComparer.Ordinal)
+    {
+        ["설정 이력 및 복원"] = "Configuration history and restore",
+        ["설정 이력"] = "Configuration history",
+        ["업데이트 전·후 설정을 비교하고 문제가 있을 때 안전하게 복원합니다."] = "Compare configuration before and after updates and restore it safely when needed.",
+        ["현재와 비교"] = "Compare with current",
+        ["복원"] = "Restore",
+        ["삭제"] = "Delete",
+        ["더보기 ▼"] = "More ▼",
+        ["닫기"] = "Close",
+        ["파일 선택 복원"] = "Restore selected files",
+        ["설정 항목 병합"] = "Merge configuration entries",
+        ["선택한 2개 snapshot 비교"] = "Compare two selected snapshots",
+        ["무결성 검사"] = "Verify integrity",
+        ["메모 수정"] = "Edit note",
+        ["snapshot 폴더 열기"] = "Open snapshot folder",
+        ["현재 설정 snapshot 저장"] = "Save current configuration snapshot",
+        ["구성요소"] = "Component",
+        ["시각"] = "Time",
+        ["단계"] = "Stage",
+        ["버전"] = "Version",
+        ["파일"] = "Files",
+        ["메모"] = "Note",
+        ["전체"] = "All",
+        ["고급 복원, 비교, 무결성 검사 등 자주 사용하지 않는 작업을 엽니다."] = "Open less frequently used actions such as advanced restore, comparison, and integrity checks.",
+        ["삭제할 롤백 백업 또는 다운로드 캐시가 없습니다."] = "There are no rollback backups or download caches to delete.",
+        ["설정 이력은 삭제하지 않습니다. 삭제한 롤백 백업은 복구할 수 없습니다. 계속하시겠습니까?"] = "Configuration history will not be deleted. Deleted rollback backups cannot be recovered. Do you want to continue?",
+        ["롤백 백업과 캐시를 정리하는 중..."] = "Cleaning rollback backups and caches...",
+        ["저장 데이터 정리 후 준비 상태가 초기화되었습니다."] = "Prepared update state was reset after stored-data cleanup.",
+        ["XAMPP에 포함된 phpMyAdmin을 확인하는 중입니다."] = "Inspecting the phpMyAdmin installation included with XAMPP.",
+        ["최신 phpMyAdmin 안정판을 확인하는 중입니다."] = "Checking the latest stable phpMyAdmin release.",
+        ["phpMyAdmin 백업 생성"] = "Create phpMyAdmin backup",
+        ["백업 생성"] = "Create backup",
+        ["현재 버전 / 업데이트 없음"] = "Current version / no update",
+        ["업데이트 없음"] = "No update"
+    };
+
     private static readonly (string Korean, string English)[] PhraseReplacements =
     {
-        ("업데이트를 진행합니다", "The update will now start"),
+        ("저장 데이터 용량 확인 실패", "Failed to inspect stored data size"),
+        ("XAMPP Updater가 생성한 롤백 백업과 다운로드/확장/런타임 캐시를 삭제합니다.", "Delete rollback backups and download/extension/runtime caches created by XAMPP Updater."),
+        ("일부 파일을 삭제하지 못했습니다", "Some files could not be deleted"),
+        ("일부 정리 완료", "Cleanup partially completed"),
+        ("정리 완료", "Cleanup completed"),
+        ("확보", "reclaimed"),
         ("업데이트를 진행할 수 없습니다", "The update cannot be started"),
+        ("업데이트를 진행합니다", "The update will now start"),
         ("업데이트가 완료되었습니다", "The update completed successfully"),
+        ("업데이트 준비", "Update preparation"),
         ("업데이트 완료", "Update completed"),
         ("업데이트 실패", "Update failed"),
-        ("업데이트 준비", "Update preparation"),
         ("업데이트 중", "Updating"),
         ("새 업데이트가 없습니다", "No new update is available"),
         ("고급 정보는 계속 확인할 수 있습니다", "Advanced information remains available"),
         ("온라인 확인 완료", "Online check completed"),
         ("계열별 선택 버전", "release-line options"),
+        ("현재 계열 추천", "Recommended for current series"),
+        ("XAMPP 공식 기준", "XAMPP official baseline"),
+        ("자동 다운로드 주소 추가 탐색 필요", "additional package URL discovery required"),
+        ("준비 점검과 패키지 준비를 실행할 수 있습니다", "Preflight and package preparation are available"),
+        ("준비 점검", "Preflight"),
         ("자동 복원", "automatic restore"),
         ("자동 롤백", "automatic rollback"),
         ("롤백 백업", "rollback backup"),
+        ("백업 예상", "Estimated backup"),
+        ("백업 위치", "Backup location"),
         ("백업 생성", "Create backup"),
         ("백업 완료", "Backup completed"),
         ("백업 실패", "Backup failed"),
         ("패키지 다운로드", "Package download"),
         ("패키지 검증", "Package verification"),
+        ("패키지 준비", "Package preparation"),
         ("다운로드 중", "Downloading"),
         ("검증 중", "Verifying"),
         ("검증 완료", "Verification completed"),
         ("서비스 중지", "Stop service"),
         ("서비스 시작", "Start service"),
         ("서비스", "Service"),
+        ("설정 이력", "Configuration history"),
         ("설정 비교", "Configuration comparison"),
+        ("설정 파일", "Configuration files"),
+        ("설정 manifest", "Configuration manifest"),
+        ("현재 설정", "Current configuration"),
         ("설정", "Configuration"),
         ("현재 버전", "Current version"),
         ("대상 버전", "Target version"),
+        ("업데이트 버전", "Update version"),
         ("최신 버전", "Latest version"),
         ("최신 안정판", "latest stable release"),
         ("최신", "Latest"),
         ("현재", "Current"),
+        ("설치 버전", "Installed version"),
+        ("버전 확인 실패", "version detection failed"),
+        ("버전 미상", "unknown version"),
         ("버전", "version"),
         ("관리자 권한", "administrator privileges"),
         ("일반 권한", "standard privileges"),
+        ("프로세스: 실행 중", "Process: running"),
+        ("프로세스: 중지", "Process: stopped"),
+        ("상태 미상", "unknown state"),
+        ("주의사항 없음", "No warnings"),
+        ("주의사항", "Warnings"),
         ("필요합니다", "is required"),
         ("필요", "required"),
         ("실패했습니다", "failed"),
@@ -130,9 +195,12 @@ internal static partial class LocalizationService
         ("미상", "Unknown"),
         ("설치됨", "Installed"),
         ("설치", "installation"),
+        ("환경", "Environment"),
         ("경로", "Path"),
         ("폴더", "folder"),
-        ("파일", "file"),
+        ("용량", "Size"),
+        ("위치", "Location"),
+        ("파일", "Files"),
         ("주의", "Warning"),
         ("오류", "Error"),
         ("취소했습니다", "was canceled"),
@@ -168,10 +236,17 @@ internal static partial class LocalizationService
     {
         if (string.IsNullOrEmpty(text) || !IsEnglish) return text ?? string.Empty;
         if (SourceKeys.TryGetValue(text, out var key)) return Get(key);
+        if (ExactEnglish.TryGetValue(text, out var exact)) return exact;
         if (!ContainsHangul(text)) return text;
 
-        var translated = RollbackVersionRegex().Replace(
+        var translated = PhpMyAdminCurrentRegex().Replace(
             text,
+            match => $"Current phpMyAdmin {match.Groups["version"].Value} is the latest stable release.");
+        translated = InstalledVersionRegex().Replace(
+            translated,
+            match => $"Installed version {match.Groups["version"].Value}");
+        translated = RollbackVersionRegex().Replace(
+            translated,
             match => $"Rollback to {match.Groups["version"].Value}");
 
         foreach (var (korean, english) in PhraseReplacements)
@@ -185,6 +260,20 @@ internal static partial class LocalizationService
     public static void ApplyToElement(FrameworkElement element)
     {
         if (!IsEnglish) return;
+
+        if (element.ToolTip is string toolTip)
+        {
+            element.ToolTip = Translate(toolTip);
+        }
+
+        if (element is DataGrid grid)
+        {
+            foreach (var column in grid.Columns)
+            {
+                if (column.Header is string header) column.Header = Translate(header);
+            }
+        }
+
         switch (element)
         {
             case TextBlock textBlock:
@@ -264,18 +353,11 @@ internal static partial class LocalizationService
     private static void ApplyToTreeCore(DependencyObject current, HashSet<DependencyObject> visited)
     {
         if (!visited.Add(current)) return;
-
-        if (current is FrameworkElement element)
-        {
-            ApplyToElement(element);
-        }
+        if (current is FrameworkElement element) ApplyToElement(element);
 
         foreach (var child in LogicalTreeHelper.GetChildren(current))
         {
-            if (child is DependencyObject dependencyObject)
-            {
-                ApplyToTreeCore(dependencyObject, visited);
-            }
+            if (child is DependencyObject dependencyObject) ApplyToTreeCore(dependencyObject, visited);
         }
     }
 
@@ -291,12 +373,17 @@ internal static partial class LocalizationService
     private static void Watch(DependencyObject target, DependencyProperty property)
     {
         if ((bool)target.GetValue(LocalizationWatchRegisteredProperty)) return;
-
         var descriptor = DependencyPropertyDescriptor.FromProperty(property, target.GetType());
         if (descriptor is null) return;
         descriptor.AddValueChanged(target, (_, _) => TranslateProperty(target, property));
         target.SetValue(LocalizationWatchRegisteredProperty, true);
     }
+
+    [GeneratedRegex(@"현재\s+phpMyAdmin\s+(?<version>\d+(?:\.\d+){1,3})은\s+최신\s+안정판입니다\.")]
+    private static partial Regex PhpMyAdminCurrentRegex();
+
+    [GeneratedRegex(@"설치\s+버전\s+(?<version>\d+(?:\.\d+){1,3})")]
+    private static partial Regex InstalledVersionRegex();
 
     [GeneratedRegex(@"(?<version>\d+(?:\.\d+){1,3})로\s*롤백")]
     private static partial Regex RollbackVersionRegex();
