@@ -1,5 +1,11 @@
 namespace XamppUpdater.Core.Models;
 
+public enum BackupKind
+{
+    Rollback = 0,
+    Safety = 1
+}
+
 public sealed record BackupManifest(
     int SchemaVersion,
     DateTimeOffset CreatedAt,
@@ -13,7 +19,8 @@ public sealed record BackupManifest(
     string? ServiceState,
     bool ProcessWasRunning,
     IReadOnlyList<BackupManifestFile> Files,
-    LogicalBackupManifest? LogicalBackup = null);
+    LogicalBackupManifest? LogicalBackup = null,
+    BackupKind Kind = BackupKind.Rollback);
 
 public sealed record BackupManifestFile(
     string RelativePath,
