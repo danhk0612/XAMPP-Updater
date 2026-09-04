@@ -20,12 +20,13 @@ public partial class MainWindow
 
         var appUpdateButton = panel.Children
             .OfType<Button>()
-            .FirstOrDefault(button => string.Equals(button.Content?.ToString(), "앱 업데이트 확인", StringComparison.Ordinal));
+            .FirstOrDefault(button => string.Equals(button.Tag?.ToString(), "AppUpdate", StringComparison.Ordinal));
         if (appUpdateButton is null) return;
 
         var button = new Button
         {
-            Content = "진단 정보 내보내기",
+            Content = LocalizationCatalog.Text("진단 정보 내보내기", "Export diagnostics"),
+            Tag = "Diagnostics",
             Margin = new Thickness(0, 0, 0, 5),
             Padding = new Thickness(8, 6, 8, 6)
         };
