@@ -35,10 +35,8 @@ public static class PhpIniOwnedPathReconciler
     private static readonly IReadOnlyDictionary<string, PathSpec> Specs =
         new Dictionary<string, PathSpec>(StringComparer.OrdinalIgnoreCase)
         {
-            // Runtime/package-owned directory. Rebase only; never copy old extension DLLs wholesale.
             ["extension_dir"] = new(ValueKind.Single, Materialization.None),
 
-            // Referenced files that should follow the PHP installation when they actually exist there.
             ["browscap"] = new(ValueKind.Single, Materialization.CopyFile),
             ["curl.cainfo"] = new(ValueKind.Single, Materialization.CopyFile),
             ["openssl.cafile"] = new(ValueKind.Single, Materialization.CopyFile),
@@ -47,21 +45,17 @@ public static class PhpIniOwnedPathReconciler
             ["auto_append_file"] = new(ValueKind.Single, Materialization.CopyFile),
             ["opcache.preload"] = new(ValueKind.Single, Materialization.CopyFile),
 
-            // Directories whose contents are meaningful user/runtime data rather than PHP binaries.
             ["openssl.capath"] = new(ValueKind.Single, Materialization.CopyDirectoryMissing),
             ["include_path"] = new(ValueKind.PathList, Materialization.CopyDirectoryMissing),
 
-            // Security path lists are rebased but are never created or copied implicitly.
             ["open_basedir"] = new(ValueKind.PathList, Materialization.None),
 
-            // Runtime scratch/cache directories. Preserve the path, not stale contents.
             ["session.save_path"] = new(ValueKind.SessionSavePath, Materialization.CreateDirectory),
             ["upload_tmp_dir"] = new(ValueKind.Single, Materialization.CreateDirectory),
             ["sys_temp_dir"] = new(ValueKind.Single, Materialization.CreateDirectory),
             ["soap.wsdl_cache_dir"] = new(ValueKind.Single, Materialization.CreateDirectory),
             ["opcache.file_cache"] = new(ValueKind.Single, Materialization.CreateDirectory),
 
-            // Log files should start clean, but their parent directory must remain usable.
             ["error_log"] = new(ValueKind.Single, Materialization.CreateParentDirectory),
             ["mail.log"] = new(ValueKind.Single, Materialization.CreateParentDirectory)
         };
@@ -121,12 +115,6 @@ public static class PhpIniOwnedPathReconciler
             warnings);
     }
 
-    /// <summary>
-    /// Resolves a configured path only when it belongs to the PHP installation.
-    /// The configured root and the physical source root are intentionally separate:
-    /// after a directory swap php.ini can still say C:\xampp\php while the old files
-    /// physically live in .xampp-updater-php-old-... .
-    /// </summary>
     public static bool TryMapOwnedPath(
         string configuredPath,
         string configuredPhpRoot,
@@ -189,8 +177,6 @@ public static class PhpIniOwnedPathReconciler
             var destinationCandidate = Path.GetFullPath(Path.Combine(destinationRoot, normalizedRelative));
             if (!IsInsideRoot(sourceCandidate, sourceRoot) || !IsInsideRoot(destinationCandidate, destinationRoot)) return false;
 
-            // Relative paths are ambiguous in PHP. Treat them as PHP-owned only when the
-            // source or target package provides concrete evidence that they belong there.
             if (!File.Exists(sourceCandidate) && !Directory.Exists(sourceCandidate) &&
                 !File.Exists(destinationCandidate) && !Directory.Exists(destinationCandidate))
             {
@@ -269,8 +255,6 @@ public static class PhpIniOwnedPathReconciler
         bool materialize,
         List<string> warnings)
     {
-        // PHP supports session.save_path forms such as "N;MODE;/path". Only the
-        // final path segment is a filesystem path; the prefix must remain intact.
         var separator = value.LastIndexOf(';');
         var prefix = separator >= 0 ? value[..(separator + 1)] : string.Empty;
         var pathValue = separator >= 0 ? value[(separator + 1)..] : value;
@@ -312,6 +296,7 @@ public static class PhpIniOwnedPathReconciler
                 case Materialization.CopyDirectoryMissing:
                     if (!Directory.Exists(source) || !IsInsideRoot(source, sourceRoot)) return;
                     if (PathEquals(source, sourceRoot) || PathEquals(destination, destinationRoot)) return;
+                    if (IsPackageManagedDirectory(destination, destinationRoot)) return;
                     CopyDirectoryMissing(source, destination);
                     warnings.Add($"PHP 소유 디렉터리 자동 보존 ({directive}): {source} → {destination}");
                     return;
@@ -330,6 +315,24 @@ public static class PhpIniOwnedPathReconciler
         catch (Exception ex)
         {
             warnings.Add($"PHP 소유 경로 자동 보존 실패 ({directive}): {ex.Message}");
+        }
+    }
+
+    private static bool IsPackageManagedDirectory(string directory, string destinationRoot)
+    {
+        try
+        {
+            var relative = Path.GetRelativePath(destinationRoot, directory);
+            if (relative == "." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || relative == "..")
+                return true;
+            var first = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+            return first.Equals("ext", StringComparison.OrdinalIgnoreCase) ||
+                   first.Equals("dev", StringComparison.OrdinalIgnoreCase) ||
+                   first.Equals("sdk", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return true;
         }
     }
 
