@@ -85,6 +85,7 @@ public partial class App : Application
         {
             LocalizationService.ApplyToElement(element);
             LocalizationCatalog.ApplyToElement(element);
+            ConfigHistoryComboLocalization.Apply(element);
         }
     }
 
