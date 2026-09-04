@@ -1,20 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
     <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>XAMPP-Updater</AssemblyName>
     <ApplicationIcon>Assets\XamppUpdater.ico</ApplicationIcon>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\XamppUpdater.Core\XamppUpdater.Core.csproj" />
   </ItemGroup>
-
+  <ItemGroup>
+    <PackageReference Include="DiffPlex.Wpf" Version="1.9.1" />
+  </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\XamppUpdater.ico" />
   </ItemGroup>
-
 </Project>
