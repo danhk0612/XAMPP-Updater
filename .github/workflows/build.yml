@@ -21,20 +21,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
       - name: Restore
         run: dotnet restore XamppUpdater.sln
       - name: Build
         run: dotnet build XamppUpdater.sln --configuration Release --no-restore
       - name: Smoke tests
         run: dotnet run --project .\tests\XamppUpdater.Core.SmokeTests\XamppUpdater.Core.SmokeTests.csproj --configuration Release --no-build
-      - name: Publish win-x64 self-contained
-        run: dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj --configuration Release --no-restore -p:PublishProfile=win-x64 -o .\artifacts\win-x64
+      - name: Publish framework-dependent app payload
+        run: dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj --configuration Release --no-restore -p:PublishProfile=win-x64 -p:AssemblyName=XAMPP-Updater.App -o .\artifacts\app-payload
+      - name: Publish native bootstrap
+        shell: pwsh
+        run: |
+          $payload = (Resolve-Path '.\artifacts\app-payload\XAMPP-Updater.App.exe').Path
+          dotnet publish .\src\XamppUpdater.Bootstrap\XamppUpdater.Bootstrap.csproj --configuration Release -r win-x64 --self-contained true -p:PublishAot=true "-p:PayloadPath=$payload" -o .\artifacts\bootstrap
+          if ($LASTEXITCODE -ne 0) { throw 'Native bootstrap publish failed.' }
+          New-Item -ItemType Directory -Force -Path '.\artifacts\win-x64' | Out-Null
+          Copy-Item '.\artifacts\bootstrap\XAMPP-Updater.exe' '.\artifacts\win-x64\XAMPP-Updater.exe' -Force
       - name: Verify published executable
         shell: pwsh
         run: |
           $exe = '.\artifacts\win-x64\XAMPP-Updater.exe'
+          $payload = '.\artifacts\app-payload\XAMPP-Updater.App.exe'
           if (-not (Test-Path $exe)) { throw "Published executable not found: $exe" }
+          if (-not (Test-Path $payload)) { throw "Framework-dependent payload not found: $payload" }
           $item = Get-Item $exe
           if ($item.Length -le 0) { throw 'Published executable is empty.' }
           [xml]$props = Get-Content '.\Directory.Build.props'
@@ -42,7 +52,14 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($expectedVersion)) { throw 'VersionPrefix not found in Directory.Build.props.' }
           $version = $item.VersionInfo.ProductVersion
           if (-not $version.StartsWith($expectedVersion)) { throw "Unexpected product version: $version / expected $expectedVersion" }
-          Write-Host "Published: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB / version $version"
+          & $exe --bootstrap-self-test
+          if ($LASTEXITCODE -ne 0) { throw "Bootstrap self-test failed with exit code $LASTEXITCODE" }
+          $files = @(Get-ChildItem '.\artifacts\win-x64' -File)
+          if ($files.Count -ne 1 -or $files[0].Name -ne 'XAMPP-Updater.exe') {
+            throw "Unexpected final publish layout: $($files.Name -join ', ')"
+          }
+          $payloadSize = [math]::Round((Get-Item $payload).Length / 1MB, 2)
+          Write-Host "Published bundle: $($item.FullName) / $([math]::Round($item.Length / 1MB, 2)) MB / payload $payloadSize MB / version $version"
       - name: Resolve release tag
         if: startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/heads/release/v')
         id: release
