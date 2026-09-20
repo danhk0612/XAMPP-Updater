@@ -30,9 +30,7 @@ internal sealed class SelfUpdateService
     {
         get
         {
-            var processPath = Environment.ProcessPath;
-            return !string.IsNullOrWhiteSpace(processPath) &&
-                   !string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase);
+            return !DistributionHost.IsDotnetHost;
         }
     }
 
@@ -147,7 +145,7 @@ internal sealed class SelfUpdateService
 
     public void StartReplacement(string stagedExecutablePath)
     {
-        var targetPath = Environment.ProcessPath ?? throw new InvalidOperationException("현재 실행 파일 경로를 확인할 수 없습니다.");
+        var targetPath = DistributionHost.GetLaunchExecutablePath();
         if (!IsPublishedExecutable)
             throw new InvalidOperationException("dotnet run 개발 실행 상태에서는 앱 자체 업데이트를 적용할 수 없습니다. 배포된 XAMPP-Updater.exe에서 실행하세요.");
 
