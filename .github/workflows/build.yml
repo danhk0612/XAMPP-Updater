@@ -52,8 +52,8 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($expectedVersion)) { throw 'VersionPrefix not found in Directory.Build.props.' }
           $version = $item.VersionInfo.ProductVersion
           if (-not $version.StartsWith($expectedVersion)) { throw "Unexpected product version: $version / expected $expectedVersion" }
-          & $exe --bootstrap-self-test
-          if ($LASTEXITCODE -ne 0) { throw "Bootstrap self-test failed with exit code $LASTEXITCODE" }
+          $selfTest = Start-Process -FilePath $exe -ArgumentList '--bootstrap-self-test' -Wait -PassThru
+          if ($selfTest.ExitCode -ne 0) { throw "Bootstrap self-test failed with exit code $($selfTest.ExitCode)" }
           $files = @(Get-ChildItem '.\artifacts\win-x64' -File)
           if ($files.Count -ne 1 -or $files[0].Name -ne 'XAMPP-Updater.exe') {
             throw "Unexpected final publish layout: $($files.Name -join ', ')"
