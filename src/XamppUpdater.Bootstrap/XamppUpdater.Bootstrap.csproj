@@ -5,6 +5,8 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <PublishAot>true</PublishAot>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
     <InvariantGlobalization>true</InvariantGlobalization>
     <DebugType>None</DebugType>
     <DebugSymbols>false</DebugSymbols>
