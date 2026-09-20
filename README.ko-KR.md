@@ -1,6 +1,6 @@
 # XAMPP Updater
 
-기존 Windows 11 XAMPP 설치의 **Apache / PHP / MariaDB**를 안전하게 업데이트하고, 선택한 XAMPP 루트에 `phpMyAdmin` 폴더가 있는 경우 **phpMyAdmin**까지 관리하는 .NET 8 WPF 도구입니다.
+기존 Windows 11 XAMPP 설치의 **Apache / PHP / MariaDB**를 안전하게 업데이트하고, 선택한 XAMPP 루트에 `phpMyAdmin` 폴더가 있는 경우 **phpMyAdmin**까지 관리하는 .NET 10 WPF 도구입니다.
 
 [English README](README.md)
 
@@ -49,7 +49,10 @@ XAMPP 전체를 다시 설치하지 않고 설치 경로와 실제 Windows 서�
 - 영구 작업 로그와 진단 정보 ZIP 내보내기
 - 한국어 / 영어 UI
 - GitHub Release 기반 자체 업데이트와 SHA256 검증
-- win-x64 self-contained 단일 EXE
+- win-x64 단일 EXE 배포
+  - 실제 WPF 앱은 .NET 10 framework-dependent single-file
+  - 배포 EXE의 네이티브 부트스트랩이 .NET 10 Desktop Runtime x64를 확인하고 앱을 실행
+  - 런타임이 없으면 Microsoft 공식 .NET 10 다운로드 페이지를 안내
 
 ## Apache / PHP 연동 정책
 
@@ -151,7 +154,7 @@ Windows 11 XAMPP 환경에서 다음 경로를 실제로 검증했습니다.
 필요 환경:
 
 - Windows 11
-- .NET 8 SDK
+- .NET 10 SDK
 
 ```powershell
 dotnet restore XamppUpdater.sln
@@ -166,18 +169,25 @@ dotnet run --project .\src\XamppUpdater.App\XamppUpdater.App.csproj
 
 ## 배포 빌드
 
-win-x64 self-contained 단일 EXE를 생성합니다.
+최종 배포물은 `XAMPP-Updater.exe` 하나입니다. 내부 WPF 앱은 win-x64 framework-dependent single-file로 만들고, 네이티브 부트스트랩 EXE 안에 포함합니다. 실행 PC에는 .NET 10 Desktop Runtime x64가 필요합니다.
 
 ```powershell
 dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj `
   -c Release `
   -p:PublishProfile=win-x64 `
-  -o .\artifacts\win-x64
+  -p:AssemblyName=XAMPP-Updater.App `
+  -o .\artifacts\app-payload
+
+$payload = (Resolve-Path .\artifacts\app-payload\XAMPP-Updater.App.exe).Path
+dotnet publish .\src\XamppUpdater.Bootstrap\XamppUpdater.Bootstrap.csproj `
+  -c Release -r win-x64 --self-contained true -p:PublishAot=true `
+  "-p:PayloadPath=$payload" `
+  -o .\artifacts\bootstrap
 ```
 
 주 실행 파일은 `XAMPP-Updater.exe`입니다.
 
-GitHub Actions는 restore, build, smoke tests, self-contained publish, EXE 검증과 artifact 업로드를 수행합니다. `release/v*` 릴리스 브랜치에서는 `XAMPP-Updater.exe.sha256`도 생성하고 EXE와 함께 GitHub Release에 게시합니다.
+GitHub Actions는 restore, build, smoke tests, framework-dependent 앱 publish, 네이티브 부트스트랩 번들 publish, 단일 EXE self-test와 artifact 업로드를 수행합니다. `release/v*` 릴리스 브랜치에서는 `XAMPP-Updater.exe.sha256`도 생성하고 EXE와 함께 GitHub Release에 게시합니다.
 
 ## 문서
 
