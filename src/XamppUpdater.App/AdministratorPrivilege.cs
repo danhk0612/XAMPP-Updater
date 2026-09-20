@@ -89,10 +89,12 @@ internal static class AdministratorPrivilege
         {
             UseShellExecute = true,
             Verb = "runas",
-            WorkingDirectory = AppContext.BaseDirectory
+            WorkingDirectory = DistributionHost.IsDotnetHost
+                ? AppContext.BaseDirectory
+                : DistributionHost.GetLaunchWorkingDirectory()
         };
 
-        if (string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase))
+        if (DistributionHost.IsDotnetHost)
         {
             var entryPath = Assembly.GetEntryAssembly()?.Location;
             if (string.IsNullOrWhiteSpace(entryPath))
@@ -102,8 +104,8 @@ internal static class AdministratorPrivilege
         }
         else
         {
-            // Published/self-contained/single-file builds relaunch the current EXE directly.
-            start.FileName = processPath;
+            // Published builds relaunch the distribution bootstrap when present.
+            start.FileName = DistributionHost.GetLaunchExecutablePath();
         }
 
         if (!string.IsNullOrWhiteSpace(xamppRoot))

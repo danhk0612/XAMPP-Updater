@@ -8,9 +8,9 @@
 
 XAMPP 전체 업그레이드 도구로 확장하지 않으며 Node.js, Perl, Tomcat 등은 범위 밖이다.
 
-## D-002 Windows 11 / .NET 8 WPF
+## D-002 Windows 11 / .NET 10 WPF
 
-주 지원 OS는 Windows 11이며 GUI는 .NET 8 WPF로 구현한다. 배포는 win-x64 self-contained single-file EXE를 기본으로 한다.
+주 지원 OS는 Windows 11이며 GUI는 .NET 10 WPF로 구현한다. 실제 WPF 앱은 win-x64 framework-dependent single-file로 publish하고, .NET 10 Desktop Runtime x64를 사전 확인하는 NativeAOT 부트스트랩 안에 포함한다. 사용자에게 배포하는 파일은 계속 단일 `XAMPP-Updater.exe`로 유지한다.
 
 ## D-003 설치 경로는 자동 감지와 직접 지정 모두 지원
 
@@ -169,7 +169,7 @@ UI는 System / Korean / English를 지원한다. 사용자 선택은 `%LOCALAPPD
 
 ## D-023 자체 업데이트
 
-GitHub Releases의 최신 버전을 확인하고 `XAMPP-Updater.exe`와 SHA256 파일을 내려받아 검증한 뒤 현재 EXE를 교체한다. 검증 이후에는 취소를 제한하고 교체 실패 시 `.update-backup`을 복원한다.
+GitHub Releases의 최신 버전을 확인하고 배포 번들인 `XAMPP-Updater.exe`와 SHA256 파일을 내려받아 검증한 뒤 현재 배포 EXE를 교체한다. 실제 WPF 앱이 부트스트랩에서 추출되어 실행 중이어도 자체 업데이트 대상은 바깥의 배포 EXE다. 검증 이후에는 취소를 제한하고 교체 실패 시 `.update-backup`을 복원한다.
 
 ## D-024 1.0 이후 하드닝
 

@@ -1,6 +1,6 @@
 # XAMPP Updater
 
-A Windows 11 .NET 8 WPF utility for safely updating **Apache, PHP, and MariaDB** inside an existing XAMPP installation, with optional **phpMyAdmin** management when a `phpMyAdmin` directory is present.
+A Windows 11 .NET 10 WPF utility for safely updating **Apache, PHP, and MariaDB** inside an existing XAMPP installation, with optional **phpMyAdmin** management when a `phpMyAdmin` directory is present.
 
 [한국어 README](README.ko-KR.md)
 
@@ -49,7 +49,10 @@ See [Compatibility](docs/COMPATIBILITY.md) for the supported environment assumpt
 - Persistent operation logs and diagnostics ZIP export
 - Korean / English UI with System, Korean, and English language modes
 - Self-update from GitHub Releases with SHA256 verification and executable replacement
-- win-x64 self-contained single-file executable
+- win-x64 single-EXE distribution
+  - the WPF application is a .NET 10 framework-dependent single-file payload
+  - a native bootstrap checks for .NET 10 Desktop Runtime x64 before launching it
+  - if the runtime is missing, the bootstrap offers the official Microsoft .NET 10 download page
 
 ## Apache and PHP integration policy
 
@@ -151,7 +154,7 @@ Excluded:
 Requirements:
 
 - Windows 11
-- .NET 8 SDK
+- .NET 10 SDK
 
 ```powershell
 dotnet restore XamppUpdater.sln
@@ -166,18 +169,24 @@ dotnet run --project .\src\XamppUpdater.App\XamppUpdater.App.csproj
 
 ## Publish
 
-Create a win-x64 self-contained single-file build:
+Create the framework-dependent app payload, then embed it in the native bootstrap. The final distributable remains a single `XAMPP-Updater.exe` and requires .NET 10 Desktop Runtime x64 on the target PC:
 
 ```powershell
 dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj `
   -c Release `
   -p:PublishProfile=win-x64 `
-  -o .\artifacts\win-x64
+  -o .\artifacts\app-payload
+
+$payload = (Resolve-Path .\artifacts\app-payload\XAMPP-Updater.App.exe).Path
+dotnet publish .\src\XamppUpdater.Bootstrap\XamppUpdater.Bootstrap.csproj `
+  -c Release -r win-x64 --self-contained true -p:PublishAot=true `
+  "-p:PayloadPath=$payload" `
+  -o .\artifacts\bootstrap
 ```
 
 The primary output is `XAMPP-Updater.exe`.
 
-GitHub Actions performs restore, build, smoke tests, self-contained publish, executable verification, and artifact upload. Release branches named `release/v*` additionally generate `XAMPP-Updater.exe.sha256` and publish both files to a GitHub Release.
+GitHub Actions performs restore, build, smoke tests, framework-dependent app publish, native bootstrap bundling, single-EXE self-test, executable verification, and artifact upload. Release branches named `release/v*` additionally generate `XAMPP-Updater.exe.sha256` and publish both files to a GitHub Release.
 
 ## Documentation
 

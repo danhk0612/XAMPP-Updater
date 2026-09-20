@@ -65,8 +65,8 @@ public partial class MainWindow
 
     private static void RestartApplication()
     {
-        var executable = Environment.ProcessPath;
-        if (string.IsNullOrWhiteSpace(executable) || !File.Exists(executable))
+        var executable = DistributionHost.GetLaunchExecutablePath();
+        if (!File.Exists(executable))
         {
             throw new InvalidOperationException("현재 실행 파일 경로를 확인할 수 없어 자동 재시작할 수 없습니다.");
         }
@@ -74,7 +74,7 @@ public partial class MainWindow
         Process.Start(new ProcessStartInfo
         {
             FileName = executable,
-            WorkingDirectory = AppContext.BaseDirectory,
+            WorkingDirectory = DistributionHost.GetLaunchWorkingDirectory(),
             UseShellExecute = true
         });
 

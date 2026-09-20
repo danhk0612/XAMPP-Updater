@@ -17,7 +17,7 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 
 완료.
 
-- [x] .NET 8 WPF GUI
+- [x] .NET 10 WPF GUI
 - [x] Core / GUI 분리
 - [x] XAMPP 경로 자동 감지 + 직접 지정
 - [x] Apache / PHP / MariaDB 현재 버전 확인
@@ -139,7 +139,9 @@ XAMPP 전체 재설치나 Node.js, Perl, Tomcat 등 다른 구성요소 관리�
 
 완료.
 
-- [x] win-x64 .NET 8 self-contained single-file EXE
+- [x] win-x64 .NET 10 framework-dependent WPF single-file payload
+- [x] .NET 10 Desktop Runtime x64 검사 NativeAOT 부트스트랩
+- [x] 최종 배포물 단일 `XAMPP-Updater.exe` 유지
 - [x] GitHub Actions restore/build/smoke/publish
 - [x] GitHub Release EXE + SHA256 게시
 - [x] GitHub Release 기반 앱 자체 업데이트
