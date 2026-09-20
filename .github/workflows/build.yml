@@ -29,7 +29,7 @@ jobs:
       - name: Smoke tests
         run: dotnet run --project .\tests\XamppUpdater.Core.SmokeTests\XamppUpdater.Core.SmokeTests.csproj --configuration Release --no-build
       - name: Publish framework-dependent app payload
-        run: dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj --configuration Release --no-restore -p:PublishProfile=win-x64 -p:AssemblyName=XAMPP-Updater.App -o .\artifacts\app-payload
+        run: dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj --configuration Release --no-restore -p:PublishProfile=win-x64 -o .\artifacts\app-payload
       - name: Publish native bootstrap
         shell: pwsh
         run: |
