@@ -175,7 +175,6 @@ dotnet run --project .\src\XamppUpdater.App\XamppUpdater.App.csproj
 dotnet publish .\src\XamppUpdater.App\XamppUpdater.App.csproj `
   -c Release `
   -p:PublishProfile=win-x64 `
-  -p:AssemblyName=XAMPP-Updater.App `
   -o .\artifacts\app-payload
 
 $payload = (Resolve-Path .\artifacts\app-payload\XAMPP-Updater.App.exe).Path
