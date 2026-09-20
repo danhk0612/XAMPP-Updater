@@ -1,6 +1,6 @@
 # XAMPP Compatibility Scope
 
-기준일: 2026-09-04
+기준일: 2026-09-20
 
 이 문서는 XAMPP Updater가 어느 범위의 Windows XAMPP 설치를 안전하게 다룰 수 있는지 정리한 호환성 기준이다.
 목표는 "모든 변형을 강제로 업데이트"하는 것이 아니라 **지원 가능한 설치를 자동 판별하고, 불확실한 설치는 실제 교체 전에 중단하거나 사용자 검토로 전환**하는 것이다.
@@ -57,6 +57,7 @@ MariaDB 배포판/세대에 따라 서버 실행 파일 이름이 `mariadbd.exe`
 ### 지원
 
 - Windows 11 x64
+- Microsoft .NET 10 Desktop Runtime x64
 - 일반적인 XAMPP 폴더 구조
 - XAMPP 루트의 임의 드라이브/수동 지정
 - 서비스 등록된 Apache/MariaDB
