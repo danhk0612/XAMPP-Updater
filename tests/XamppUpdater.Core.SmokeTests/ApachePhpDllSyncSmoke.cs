@@ -102,7 +102,7 @@ internal static class ApachePhpDllSyncSmoke
             if (ApachePhpCurlHttpProbe.FindHttpListenPort("#Listen 80\nListen 443") is not null)
                 throw new InvalidOperationException("SSL-only Apache listener must not be probed as HTTP.");
             if (ApachePhpCurlHttpProbe.FindDocumentRoot(
-                $"DocumentRoot \\"{Path.Combine(root, "htdocs").Replace('\\', '/')}\\"",
+                $"DocumentRoot \"{Path.Combine(root, "htdocs").Replace('\\', '/')}\"",
                 apache) != Path.GetFullPath(Path.Combine(root, "htdocs")))
                 throw new InvalidOperationException("Apache DocumentRoot parser failed.");
 
