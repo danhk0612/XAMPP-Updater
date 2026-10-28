@@ -22,32 +22,8 @@ public static class ApachePhpDllSyncService
         string apacheRoot,
         Func<string, IReadOnlyList<string>>? readImports = null)
     {
-        var curl = Path.Combine(phpRoot, "ext", "php_curl.dll");
-        if (!File.Exists(curl)) return Array.Empty<Change>();
-
-        readImports ??= PeDependencyInspector.ReadImports;
         var apacheBin = Path.Combine(apacheRoot, "bin");
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var queue = new Queue<string>();
-        queue.Enqueue(curl);
-
-        while (queue.Count > 0)
-        {
-            var file = queue.Dequeue();
-            if (!seen.Add(Path.GetFullPath(file))) continue;
-            foreach (var imported in readImports(file))
-            {
-                var name = Path.GetFileName(imported);
-                if (!IsSafeDllName(name)) continue;
-                var dependency = Path.Combine(phpRoot, name);
-                if (!File.Exists(dependency)) continue;
-                // Other PHP extensions are not part of cURL's dependency closure.
-                if (IsApacheOwnedDependency(name)) continue;
-                candidates.Add(name);
-                queue.Enqueue(dependency);
-            }
-        }
+        var candidates = DependencyNames(phpRoot, readImports);
 
         return candidates
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
@@ -60,9 +36,66 @@ public static class ApachePhpDllSyncService
                 return new Change(name, source, target, existed,
                     existed ? Hash(target) : null, sourceHash);
             })
-            .Where(change => change.Existed &&
+            .Where(change =>
                 !string.Equals(change.OriginalSha256, change.AppliedSha256, StringComparison.OrdinalIgnoreCase))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Verify all cURL dependency DLLs, including ones that already matched before the update.
+    /// This is deliberately re-evaluated after restarting Apache: a third party may remove a
+    /// synchronized DLL after the initial copy, even though the initial SHA256 check passed.
+    /// </summary>
+    private static IReadOnlyList<string> DependencyNames(
+        string phpRoot, Func<string, IReadOnlyList<string>>? readImports)
+    {
+        var curl = Path.Combine(phpRoot, "ext", "php_curl.dll");
+        if (!File.Exists(curl)) return Array.Empty<string>();
+
+        readImports ??= PeDependencyInspector.ReadImports;
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<string>();
+        queue.Enqueue(curl);
+        while (queue.Count > 0)
+        {
+            var file = queue.Dequeue();
+            if (!seen.Add(Path.GetFullPath(file))) continue;
+            foreach (var imported in readImports(file))
+            {
+                var name = Path.GetFileName(imported);
+                if (!IsSafeDllName(name) || IsApacheOwnedDependency(name)) continue;
+                var dependency = Path.Combine(phpRoot, name);
+                if (!File.Exists(dependency)) continue;
+                candidates.Add(name);
+                queue.Enqueue(dependency);
+            }
+        }
+        return candidates.OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    public static IReadOnlyList<string> VerifyDependencies(string phpRoot, string apacheRoot, string phase,
+        Func<string, IReadOnlyList<string>>? readImports = null)
+    {
+        var names = DependencyNames(phpRoot, readImports);
+        var diagnostics = new List<string>();
+        foreach (var name in names)
+        {
+            var phpDll = Path.Combine(phpRoot, name);
+            var apacheDll = Path.Combine(apacheRoot, "bin", name);
+            var expected = Hash(phpDll);
+            var exists = File.Exists(apacheDll);
+            var actual = exists ? Hash(apacheDll) : null;
+            var state = !exists ? "MISSING" :
+                string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase) ? "MATCH" : "HASH_MISMATCH";
+            diagnostics.Add($"{name}={state} (PHP={expected[..12]}, Apache={(actual is null ? "없음" : actual[..12])})");
+            if (state != "MATCH")
+                throw new InvalidOperationException(
+                    $"Apache cURL DLL 검증 실패 [{phase}]: {name}, state={state}, " +
+                    $"PHP SHA256={expected}, Apache SHA256={actual ?? "MISSING"}, path={apacheDll}. " +
+                    "기존 PHP와 Apache DLL을 자동 원복합니다.");
+        }
+        return diagnostics;
     }
 
     public static void Capture(IReadOnlyList<Change> changes, string backupRoot)
@@ -124,7 +157,8 @@ public static class ApachePhpDllSyncService
             if (string.Equals(current, item.OriginalSha256, StringComparison.OrdinalIgnoreCase)) continue;
             // A separate Apache update may have replaced this file since PHP was updated.
             // Do not silently overwrite changes made by another component's update.
-            if (!string.Equals(current, item.AppliedSha256, StringComparison.OrdinalIgnoreCase))
+            if (current is not null &&
+                !string.Equals(current, item.AppliedSha256, StringComparison.OrdinalIgnoreCase))
             {
                 warnings.Add("별도 Apache 변경으로 DLL 복원을 건너뜀: " + item.Name);
                 continue;
