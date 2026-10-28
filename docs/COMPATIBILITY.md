@@ -128,3 +128,12 @@ MariaDB 배포판/세대에 따라 서버 실행 파일 이름이 `mariadbd.exe`
 3. 기존 설정/모듈/확장의 실동작 검증 결과를 정적 추정보다 우선한다.
 4. 파괴적 교체 전에는 반드시 롤백 백업과 사전 검증을 통과해야 한다.
 5. 범위를 벗어난 비표준 구조는 억지로 지원하지 않고 이유를 표시한다.
+
+## DLL dependency audit and collision review (v1.1.3)
+
+- Enabled extensions are enumerated from `php.ini`; the audit does not assume that every DLL in `php/ext` is enabled.
+- Apache module dependencies are read from configured `LoadModule` entries and Apache's executable. A module loaded dynamically or under conditional directives may not be visible to a static scan.
+- A `php/` versus `apache/bin/` same-name DLL hash mismatch produces a warning and diagnostic context. Apache runtime DLLs are **not** forcibly replaced.
+- The existing cURL-only synchronization refuses to replace a DLL also imported by active Apache modules; missing/mismatching cURL dependencies not used by Apache continue to synchronize transactionally.
+- Static missing DLLs are diagnostic warnings because Windows system DLLs, PATH and dynamic loading can resolve libraries outside the audited folders.
+- Verify active PHP modules, Apache service behavior and application-specific network/database extensions on representative customer installations. This feature does not claim universal ABI compatibility.
