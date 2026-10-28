@@ -28,3 +28,11 @@ Apache가 원래 중지 상태였다면 검증을 위해 임의로 서비스를 
 ## 범위 밖
 
 단순한 공급자 지원 버전 차이를 이유로 상대 구성요소의 버전을 자동 변경하지 않는다. 자동 개입은 실제 파일/설정/런타임 연동 검증 실패에 한정한다.
+
+## PHP cURL / Apache bin DLL collision handling
+
+When PHP is updated, XAMPP Updater reads the PE import dependency graph reachable from `php/ext/php_curl.dll`. For DLLs supplied at the PHP root, it synchronizes only *different same-named files already present* in `apache/bin`. This handles the observed `libssh2.dll`, `nghttp2.dll`, `brotlicommon.dll`, and `brotlidec.dll` collisions without forcing a PHP-version-specific copy list. Apache-owned OpenSSL, APR, PHP SAPI, and libhttpd DLLs are excluded from automatic replacement.
+
+Changes are applied with Apache stopped and verified with SHA256. The original Apache DLLs and their applied hashes are retained in the selected PHP rollback backup, separately from the PHP folder files. A PHP rollback restores these DLLs unless another Apache update has subsequently changed them (in which case the DLL is preserved and a warning is issued). Apache updates and Apache rollbacks re-evaluate cURL dependency collisions against the installed PHP version. Existing PHP backups without this metadata remain supported.
+
+The integration gate probes the cURL extension through the Windows loader when it is enabled, but does not send an HTTP request or create a temporary web-accessible PHP script. Therefore live HTTP cURL behavior is not guaranteed by this passive check; a real Apache/PHP endpoint test remains useful before production deployment.
