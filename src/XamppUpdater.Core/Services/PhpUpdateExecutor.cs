@@ -139,6 +139,9 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
                     string.Join(", ", dllChanges.Select(item => item.Name)));
             }
 
+            steps.AddRange(ApachePhpDllSyncService.VerifyDependencies(phpRoot, apacheRoot, "Apache 시작 전")
+                .Select(detail => "Apache cURL DLL [시작 전] " + detail));
+
             ValidateInstalledPhp(phpRoot);
             steps.Add("php -v / php -m 검증 완료");
 
@@ -157,6 +160,8 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
                 await Task.Run(() => _serviceController.Start(apacheServiceName, ApacheServiceTransitionTimeout), cancellationToken);
                 apacheStopped = false;
                 steps.Add($"Apache 서비스 재시작: {apacheServiceName}");
+                steps.AddRange(ApachePhpDllSyncService.VerifyDependencies(phpRoot, apacheRoot, "Apache 재시작 직후")
+                    .Select(detail => "Apache cURL DLL [재시작 후] " + detail));
             }
 
             TryDeleteDirectory(oldPhpRoot);
