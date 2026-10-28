@@ -1,9 +1,9 @@
 # Apache/PHP HTTP probe expansion
 
-## Phase A implementation (candidate for v1.1.4)
+## Phase A implementation (v1.1.4)
 
 Base: `main` / v1.1.3, commit `2c4390b951c053eadabebab9fefb1f62fd490082`.
-Branch: `phase-a-custom-document-root`. No version bump or release until Windows CI passes.
+Implementation branch: `phase-a-custom-document-root`. Both implementation commits passed Windows CI; release preparation uses `release/v1.1.4`.
 
 The shared final integration gate used by verified Apache/PHP updates and integration-checked rollbacks still owns the rollback decision. HTTP PASS is a step; SKIP is a warning; confirmed PHP-source exposure or executed PHP cURL failure is FAIL and uses the existing rollback contract. DLL synchronization, SHA256 checks, dependency ownership protection, backups, migration and MariaDB/phpMyAdmin logic are unchanged.
 
@@ -74,3 +74,9 @@ Handle reproducible cases for Rewrite/.htaccess, Alias, Basic/IP access control,
 GitHub Git reads work through platform authentication. GitHub API access initially returned Forbidden; `api.github.com` has been added to the environment draft's custom allowlist, preserving package-manager presets. The draft must be saved/applied in environment settings before PR/API operations can be retried. Read-only CI results are available separately through the public GitHub Actions web pages. API authentication/write permission must then be verified separately; Git access alone does not prove it.
 
 A reviewable PR body is in `docs/HTTP_PROBE_PHASE_A_PR.md`. After access is available: open Phase A PR, examine the current-head Windows CI (the initial implementation CI passed), fix any new failures, verify real Apache/PHP cases, merge only with those gates met, then bump to 1.1.4 following Directory.Build.props and the release/v* workflow. Check the published EXE and SHA256. Do not create release branches to bypass blocked checks. Phase B/C implementation and release must not be marked complete from this Phase A candidate.
+
+## v1.1.4 release preparation
+
+The user explicitly requested deployment after the Phase A implementation CI passed. Final implementation commit `731551b30b5bfbb73d390df8fbada109b8d7bef3` passed [Windows CI 40754739155](https://github.com/danhk0612/XAMPP-Updater/actions/runs/40754739155), including full smoke tests, NativeAOT publishing, executable verification and artifact upload.
+
+GitHub API access remains blocked, so PR creation is unavailable. Automatic approval review rejected the attempted direct main push because it would bypass the requested PR/merge gate; the attempt did not execute. No default-branch update or release trigger has been made. The version and release notes are prepared on the feature branch for review. Continue through PR/merge once API access is available, or obtain explicit authorization for the direct-main/release path rejected by the reviewer. Do not work around that rejection using a release-branch push. The existing release/v* workflow retains all CI checks. Version 1.1.4 contains Phase A only. Real Apache/PHP service integration and JCMS24 production validation remain unverified; Include/VirtualHost/HTTPS support remains deferred.
