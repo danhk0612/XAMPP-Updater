@@ -29,6 +29,8 @@ public static class BackupIntegrityVerifier
                 throw new InvalidDataException("백업 파일 SHA256 검증 실패: " + item.RelativePath);
         }
 
+        ApachePhpDllSyncService.VerifyBackup(backup.Manifest.BackupRoot);
+
         var logical = backup.Manifest.LogicalBackup;
         if (logical is null)
         {
