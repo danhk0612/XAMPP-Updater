@@ -54,6 +54,11 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
             ? SnapshotApachePhpConfigs(installation.RootPath)
             : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var moved = false;
+        var dllSafetyRoot = Path.Combine(parent, ".xampp-updater-dll-safety-" + Guid.NewGuid().ToString("N"));
+        var dllSafetyFiles = type == XamppComponentType.Php
+            ? ApachePhpDllSyncService.CaptureCurrent(rollbackBackup.Manifest.BackupRoot,
+                Path.Combine(installation.RootPath, "apache"), dllSafetyRoot)
+            : Array.Empty<string>();
 
         try
         {
@@ -83,6 +88,9 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
             if (!innerResult.Success)
             {
                 RestoreSafetyState(componentRoot, safetyRoot, apachePhpConfigs, steps);
+                if (type == XamppComponentType.Php)
+                    ApachePhpDllSyncService.RestoreCurrent(rollbackBackup.Manifest.BackupRoot,
+                        Path.Combine(installation.RootPath, "apache"), dllSafetyRoot, dllSafetyFiles);
                 moved = false;
                 if (apacheWasRunning && apacheServiceName is not null)
                     _services.Start(apacheServiceName, TimeSpan.FromSeconds(45));
@@ -129,6 +137,9 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
                 if (moved && Directory.Exists(safetyRoot))
                 {
                     RestoreSafetyState(componentRoot, safetyRoot, apachePhpConfigs, steps);
+                    if (type == XamppComponentType.Php)
+                        ApachePhpDllSyncService.RestoreCurrent(rollbackBackup.Manifest.BackupRoot,
+                            Path.Combine(installation.RootPath, "apache"), dllSafetyRoot, dllSafetyFiles);
                     moved = false;
                     restored = true;
                 }
@@ -144,6 +155,10 @@ public sealed class IntegrationCheckedComponentRollbackService : IComponentRollb
         }
         finally
         {
+            if (Directory.Exists(dllSafetyRoot))
+            {
+                try { Directory.Delete(dllSafetyRoot, true); } catch { }
+            }
             if (moved && Directory.Exists(safetyRoot))
             {
                 try { Directory.Delete(safetyRoot, true); } catch { }

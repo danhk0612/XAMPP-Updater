@@ -49,3 +49,9 @@ Schema 1/2 safety backups can be recognized conservatively when their recorded v
 ## Scope
 
 This policy applies to the common Apache/PHP/MariaDB `BackupManifest` catalog. phpMyAdmin continues to use its dedicated folder-replacement rollback metadata and validation path; its rollback behavior is intentionally not forced through the binary-component manifest model.
+
+## Apache DLLs modified by PHP updates
+
+A PHP update may additionally synchronize dependencies of `php_curl.dll` into the existing Apache `bin` directory. The original files are backed up under `apache-php-dll-sync/` in the PHP rollback backup, with an `apache-php-dll-sync.json` journal containing original and applied SHA256 values. Integrity verification checks these snapshots before a rollback. Existing backups without the journal continue to work.
+
+On PHP rollback, a DLL still matching the applied hash is restored to its original hash. A DLL modified independently by a subsequent Apache update is not overwritten and is reported as a warning. If the overall integration rollback fails, the temporary pre-rollback Apache DLL snapshot is restored alongside the previous PHP files and configuration. Apache version changes independently re-evaluate cURL dependency collisions against the installed PHP binaries.
