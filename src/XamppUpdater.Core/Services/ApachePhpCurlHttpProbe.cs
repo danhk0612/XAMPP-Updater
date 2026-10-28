@@ -76,6 +76,7 @@ public static class ApachePhpCurlHttpProbe
             "catch (Throwable $e) { $ok = false; } " +
             "echo '" + token + "' . '|' . ($ok ? 'OK' : 'CURL_MISSING');";
         var created = false;
+        var phase = ProbePhase.FilePreparation;
         Result? result = null;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(options.Timeout);
@@ -89,6 +90,7 @@ public static class ApachePhpCurlHttpProbe
                 using var writer = new StreamWriter(output, new UTF8Encoding(false));
                 await writer.WriteAsync(script.AsMemory(), timeout.Token);
             }
+            phase = ProbePhase.HttpRequest;
             using var handler = options.HandlerFactory?.Invoke() ?? new HttpClientHandler
             {
                 AllowAutoRedirect = false, UseProxy = false, UseCookies = false,
@@ -127,7 +129,7 @@ public static class ApachePhpCurlHttpProbe
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
         {
-            result = Outcome(ProbeStatus.Skip, ProbePhase.HttpRequest, "PROBE_UNAVAILABLE", ex.Message);
+            result = Outcome(ProbeStatus.Skip, phase, "PROBE_UNAVAILABLE", ex.Message);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -157,7 +159,7 @@ public static class ApachePhpCurlHttpProbe
         return result! with { ElapsedMilliseconds = clock.ElapsedMilliseconds };
     }
     public static string? FindDocumentRoot(string config, string apacheRoot) =>
-        ApachePhpProbeTargetSelector.Select(config + "\nListen 127.0.0.1:80 http\n", apacheRoot, out _)?.DocumentRoot;
+        ApachePhpProbeTargetSelector.Select(config, apacheRoot, out _, requireListener: false)?.DocumentRoot;
 
     public static int? FindHttpListenPort(string config)
     {

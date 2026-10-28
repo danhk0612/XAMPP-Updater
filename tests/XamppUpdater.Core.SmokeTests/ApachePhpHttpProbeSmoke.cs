@@ -155,6 +155,7 @@ internal static class ApachePhpHttpProbeSmoke
                 Assert(behavior != "redirect" || live.ReasonCode == "HTTP_UNVERIFIED", "Redirect followed");
                 NoFiles(web);
             }
+            Assert(FindDocumentRoot(Config(web), apache) == web, "DocumentRoot helper failed on full configuration");
             var relative = ApachePhpCurlHttpProbe.FindDocumentRoot("ServerRoot \"" + apache + "\"\nDocumentRoot \"web root\"", apache);
             Assert(relative == Path.Combine(apache, "web root"), "ServerRoot relative path failed");
             var link = Path.Combine(root, "linked-web");

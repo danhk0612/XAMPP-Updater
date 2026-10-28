@@ -8,7 +8,7 @@ internal static class ApachePhpProbeTargetSelector
 {
     internal sealed record Target(string DocumentRoot, IPAddress Address, int Port);
 
-    internal static Target? Select(string config, string apacheRoot, out string reason)
+    internal static Target? Select(string config, string apacheRoot, out string reason, bool requireListener = true)
     {
         reason = "CONFIG_UNSUPPORTED";
         var lines = config.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0 && !line.StartsWith('#')).ToArray();
@@ -20,7 +20,7 @@ internal static class ApachePhpProbeTargetSelector
         var serverRoot = Path.GetFullPath(apacheRoot);
         foreach (var line in lines)
         {
-            if (Regex.IsMatch(line, @"^(Include(?:Optional)?|Define|UnDefine)\b|^<(?:VirtualHost|If\w*|Else\w*|Macro)\b", RegexOptions.IgnoreCase))
+            if (Regex.IsMatch(line, @"^(Include(?:Optional)?|Define|UnDefine|Use|AccessFileName)\b|^<(?:VirtualHost|If\w*|Else\w*|Macro)\b", RegexOptions.IgnoreCase))
                 return null;
             if (line.StartsWith("</", StringComparison.Ordinal)) { if (--depth < 0) return null; continue; }
             if (line.StartsWith('<')) { depth++; continue; }
@@ -50,9 +50,10 @@ internal static class ApachePhpProbeTargetSelector
             // Do not send HTTP to TLS or proxy-only frontends, including nonstandard TLS ports.
             if (name.Equals("SSLEngine", StringComparison.OrdinalIgnoreCase) && !value.Equals("off", StringComparison.OrdinalIgnoreCase)) return null;
         }
-        if (depth != 0 || roots.Count != 1 || listeners.Count != 1) return null;
+        if (depth != 0 || roots.Count != 1 || listeners.Count > 1 || (requireListener && listeners.Count != 1)) return null;
         reason = "TARGET_SELECTED";
-        return new Target(roots[0], listeners[0].Address, listeners[0].Port);
+        return new Target(roots[0], listeners.Count == 0 ? IPAddress.Loopback : listeners[0].Address,
+            listeners.Count == 0 ? 0 : listeners[0].Port);
     }
 
     internal static bool TryPath(string value, string serverRoot, out string? path)

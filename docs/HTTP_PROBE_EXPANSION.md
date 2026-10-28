@@ -39,13 +39,15 @@ dotnet build XamppUpdater.sln -c Release --no-restore -p:EnableWindowsTargeting=
 dotnet run --project tests/XamppUpdater.Core.SmokeTests/XamppUpdater.Core.SmokeTests.csproj -c Release --no-build -- --http-probe-only
 ```
 
-Targeted run: **127 HTTP probe assertions passed**, followed by existing Apache cURL DLL sync and dependency-audit fixtures. Existing module-initialized fixtures also executed (backup/checksum, PHP migration/staging/owned paths, rollback SAPI, package/catalog, preflight and config diff). Windows-only branches of those fixtures were not exercised on Linux.
+Targeted run: **128 HTTP probe assertions passed**, followed by existing Apache cURL DLL sync and dependency-audit fixtures. Existing module-initialized fixtures also executed (backup/checksum, PHP migration/staging/owned paths, rollback SAPI, package/catalog, preflight and config diff). Windows-only branches of those fixtures were not exercised on Linux.
 
 The HTTP cases use controlled responses plus a real TcpListener/production HttpClient loopback transport. They cover base/custom/spaced/Korean/external root paths, runtime root mismatch, no configuration edits, file collision, read-only directory, reparse points, cancellation, timeout, cleanup failure, response limits, source exposure, cURL failure, wrong-site responses, redirects/access errors and unsupported configuration. These tests do **not** execute Apache or PHP.
 
 The full original smoke runner was tried during onboarding: **blocked by Windows Registry PlatformNotSupportedException on Linux**. That is a diagnosed platform limitation, not a passing suite. The new targeted argument preserves the full Windows runner's assertions; the default Windows CI run also executes the new fixtures.
 
-Not verified: Windows build/smoke/publish CI, WPF, Windows service `-n`/DUMP_RUN_CFG behavior, native bootstrap, real Windows Apache/PHP HTTP execution, actual PHP 8.2→8.2 or 8.2→8.3 upgrades, service restart/rollback, JCMS24, release EXE/checksum. Do not describe this candidate as released or production-validated.
+Windows CI for implementation commit `4eaf4f38f92a3af44b022e70ec4847be3ecd2500`: **passed**. [Run 40754147145](https://github.com/danhk0612/XAMPP-Updater/actions/runs/40754147145) completed restore, Release build, full smoke runner, app publish, NativeAOT bootstrap publish, executable version/layout/bootstrap self-test and win-x64 artifact upload successfully. Release tag/checksum/asset steps were correctly skipped on this feature branch. Step outcomes were read from GitHub's public Actions job page; authenticated logs/artifact download were unavailable. This evidence applies to that exact implementation commit; inspect later branch runs for follow-up changes.
+
+Not verified: WPF GUI behavior, actual Windows service `-n`/DUMP_RUN_CFG behavior against Apache, real Windows Apache/PHP HTTP execution, actual PHP 8.2→8.2 or 8.2→8.3 upgrades, service restart/rollback, JCMS24, release EXE/checksum. Do not describe this candidate as released or production-validated.
 
 ## Phase B dependency and design
 
@@ -69,6 +71,6 @@ Handle reproducible cases for Rewrite/.htaccess, Alias, Basic/IP access control,
 
 ## External gates and continuation
 
-GitHub Git reads work through platform authentication. GitHub API access initially returned Forbidden; `api.github.com` has been added to the environment draft's custom allowlist, preserving package-manager presets. The draft must be saved/applied in environment settings before PR/CI/API operations can be retried. API authentication/write permission must then be verified separately; Git access alone does not prove it.
+GitHub Git reads work through platform authentication. GitHub API access initially returned Forbidden; `api.github.com` has been added to the environment draft's custom allowlist, preserving package-manager presets. The draft must be saved/applied in environment settings before PR/API operations can be retried. Read-only CI results are available separately through the public GitHub Actions web pages. API authentication/write permission must then be verified separately; Git access alone does not prove it.
 
-A reviewable PR body is in `docs/HTTP_PROBE_PHASE_A_PR.md`. After access is available: open Phase A PR, examine actual Windows CI, fix failures, verify real Apache/PHP cases, merge only with those gates met, then bump to 1.1.4 following Directory.Build.props and the release/v* workflow. Check the published EXE and SHA256. Do not create release branches to bypass blocked checks. Phase B/C implementation and release must not be marked complete from this Phase A candidate.
+A reviewable PR body is in `docs/HTTP_PROBE_PHASE_A_PR.md`. After access is available: open Phase A PR, examine the current-head Windows CI (the initial implementation CI passed), fix any new failures, verify real Apache/PHP cases, merge only with those gates met, then bump to 1.1.4 following Directory.Build.props and the release/v* workflow. Check the published EXE and SHA256. Do not create release branches to bypass blocked checks. Phase B/C implementation and release must not be marked complete from this Phase A candidate.
