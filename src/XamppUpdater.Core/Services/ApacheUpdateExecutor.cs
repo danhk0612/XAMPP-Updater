@@ -100,6 +100,13 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
                 steps.Add($"참조 모듈 {preservedModules.Count}개 보존");
             }
 
+            var phpRoot = Path.Combine(xamppRoot, "php");
+            var dllChanges = ApachePhpDllSyncService.Plan(phpRoot, apacheRoot);
+            ApachePhpDllSyncService.Apply(dllChanges);
+            if (dllChanges.Count > 0)
+                steps.Add("Apache 업데이트 후 PHP cURL DLL 재동기화: " +
+                    string.Join(", ", dllChanges.Select(item => item.Name)));
+
             PreserveDirectoryIfPresent(oldRoot, apacheRoot, "logs");
             steps.Add("기존 Apache logs 복사 보존 완료 (롤백 원본 유지)");
 
