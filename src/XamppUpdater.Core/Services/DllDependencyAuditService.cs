@@ -101,9 +101,12 @@ public static class DllDependencyAuditService
 
             var apacheOwner = apacheDeps.ContainsKey(name);
             var phpConsumer = phpDeps.ContainsKey(name);
+            var protectedLibrary = IsProtectedApacheRuntime(name);
+            var blocking = apacheOwner && phpConsumer && !protectedLibrary;
             findings.Add(new DllAuditFinding(
-                apacheOwner && phpConsumer ? DllAuditSeverity.Block : DllAuditSeverity.Warning,
-                apacheOwner && phpConsumer ? "SHARED_COLLISION" : "SAME_NAME_DIFFERENT_BINARY",
+                blocking ? DllAuditSeverity.Block : DllAuditSeverity.Warning,
+                protectedLibrary && apacheOwner ? "APACHE_RUNTIME_COLLISION" :
+                    blocking ? "SHARED_COLLISION" : "SAME_NAME_DIFFERENT_BINARY",
                 name,
                 $"PHP/Apache DLL SHA256 불일치; PHP 참조={phpConsumer}, Apache 참조={apacheOwner}. " +
                 "실제 로딩 경로와 ABI를 확인해야 하며 자동으로 Apache 소유 DLL을 교체하지 않습니다."));
@@ -225,6 +228,13 @@ public static class DllDependencyAuditService
         }
         return roots.ToArray();
     }
+
+    private static bool IsProtectedApacheRuntime(string name) =>
+        name.StartsWith("libssl", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("libcrypto", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("libapr", StringComparison.OrdinalIgnoreCase) ||
+        name.Equals("libhttpd.dll", StringComparison.OrdinalIgnoreCase) ||
+        name.StartsWith("php", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsValidImport(string name) =>
         !string.IsNullOrWhiteSpace(name) &&
