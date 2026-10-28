@@ -112,6 +112,7 @@ CheckServiceImagePath(
     @"C:\xampp\mysql\bin\mysqld.exe");
 
 ApachePhpDllSyncSmoke.Run();
+DllDependencyAuditSmoke.Run();
 CheckZipPeArchitecture();
 
 var root = Path.Combine(Path.GetTempPath(), $"xampp-updater-smoke-{Guid.NewGuid():N}");

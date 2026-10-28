@@ -83,6 +83,12 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
 
         try
         {
+            var originalAudit = DllDependencyAuditService.Analyze(phpRoot, apacheRoot);
+            steps.AddRange(originalAudit.Summarize("업데이트 전"));
+            warnings.AddRange(originalAudit.Findings
+                .Where(item => item.Severity != DllAuditSeverity.Info)
+                .Take(20).Select(item => "기존 설치 DLL 진단: " + item.Code + " " + item.Name + " / " + item.Detail));
+
             Directory.CreateDirectory(extractedRoot);
             ZipFile.ExtractToDirectory(package.PackagePath, extractedRoot, overwriteFiles: true);
             var payloadRoot = ResolvePayloadRoot(extractedRoot, package.PayloadEntry);
@@ -129,7 +135,10 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
             warnings.AddRange(sapiWarnings);
             steps.Add("Apache PHP SAPI 설정 갱신 완료");
 
+            var proposedDllAudit = DllDependencyAuditService.Analyze(phpRoot, apacheRoot);
+            steps.AddRange(proposedDllAudit.Summarize("PHP 설치 후 / DLL 동기화 전"));
             var dllChanges = ApachePhpDllSyncService.Plan(phpRoot, apacheRoot);
+            proposedDllAudit.EnsureSafeCurlCopy(dllChanges);
             if (dllChanges.Count > 0)
             {
                 ApachePhpDllSyncService.Capture(dllChanges, backup.Manifest.BackupRoot);
