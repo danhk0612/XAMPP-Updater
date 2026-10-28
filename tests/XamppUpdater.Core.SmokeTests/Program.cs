@@ -111,6 +111,7 @@ CheckServiceImagePath(
     @"C:\xampp\mysql\bin\mysqld.exe --defaults-file=C:\xampp\mysql\bin\my.ini mysql",
     @"C:\xampp\mysql\bin\mysqld.exe");
 
+ApachePhpDllSyncSmoke.Run();
 CheckZipPeArchitecture();
 
 var root = Path.Combine(Path.GetTempPath(), $"xampp-updater-smoke-{Guid.NewGuid():N}");
