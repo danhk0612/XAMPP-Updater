@@ -101,7 +101,10 @@ public sealed partial class ApacheUpdateExecutor : IApacheUpdateExecutor
             }
 
             var phpRoot = Path.Combine(xamppRoot, "php");
+            var audit = DllDependencyAuditService.Analyze(phpRoot, apacheRoot);
+            steps.AddRange(audit.Summarize("Apache 교체 후 / DLL 동기화 전"));
             var dllChanges = ApachePhpDllSyncService.Plan(phpRoot, apacheRoot);
+            audit.EnsureSafeCurlCopy(dllChanges);
             ApachePhpDllSyncService.Apply(dllChanges);
             if (dllChanges.Count > 0)
                 steps.Add("Apache 업데이트 후 PHP cURL DLL 재동기화: " +
