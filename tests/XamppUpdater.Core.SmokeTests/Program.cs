@@ -3,6 +3,15 @@ using System.Runtime.InteropServices;
 using XamppUpdater.Core.Models;
 using XamppUpdater.Core.Services;
 
+await ApachePhpHttpProbeSmoke.RunAsync();
+if (args.Contains("--http-probe-only"))
+{
+    ApachePhpDllSyncSmoke.Run();
+    DllDependencyAuditSmoke.Run();
+    Console.WriteLine("HTTP probe and DLL regression fixtures passed.");
+    return 0;
+}
+
 var failures = new List<string>();
 
 CheckVersion(XamppComponentType.Apache, "Server version: Apache/2.4.65 (Win64)", "2.4.65");

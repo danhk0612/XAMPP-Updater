@@ -1,129 +1,172 @@
+using System.Diagnostics;
 using System.Net;
-using System.Text.RegularExpressions;
+using System.Text;
 
 namespace XamppUpdater.Core.Services;
 
-/// <summary>
-/// Executes a short-lived, unpredictable PHP endpoint through the actual Apache service.
-/// Never changes Apache configuration or starts a stopped service. The endpoint only exercises
-/// extension_loaded/curl_init/curl_close; it makes no outbound HTTP requests.
-/// </summary>
+/// <summary>Web-SAPI/cURL initialization only; no outbound cURL transfer or service/config changes.</summary>
 public static class ApachePhpCurlHttpProbe
 {
-    public sealed record Result(bool Executed, bool Success, string Detail);
-
-    public static async Task<Result> TryRunAsync(string xamppRoot, CancellationToken cancellationToken = default)
+    public enum ProbeStatus { Pass, Fail, Skip }
+    public enum ProbePhase { ConfigDiscovery, TargetSelection, FilePreparation, HttpRequest, PhpExecution, CurlCheck, Cleanup }
+    public sealed record Result(bool Executed, bool Success, string Detail)
     {
-        var apacheRoot = Path.Combine(xamppRoot, "apache");
-        var config = Path.Combine(apacheRoot, "conf", "httpd.conf");
-        var documentRoot = Path.Combine(xamppRoot, "htdocs");
-        if (!File.Exists(config) || !Directory.Exists(documentRoot))
-            return new Result(false, false, "Apache 설정 또는 기본 htdocs 폴더가 없어 HTTP cURL 검증을 건너뜁니다.");
+        public ProbeStatus Status { get; init; } = Success ? ProbeStatus.Pass : Executed ? ProbeStatus.Fail : ProbeStatus.Skip;
+        public ProbePhase Phase { get; init; }
+        public string ReasonCode { get; init; } = "UNKNOWN";
+        public string Protocol { get; init; } = "Unknown";
+        public string? Host { get; init; }
+        public int? Port { get; init; }
+        public string? VirtualHost { get; init; }
+        public string? DocumentRoot { get; init; }
+        public long ElapsedMilliseconds { get; init; }
+    }
+    internal sealed class ProbeOptions
+    {
+        internal Func<HttpMessageHandler>? HandlerFactory { get; init; }
+        internal Func<string> NewToken { get; init; } = () => Guid.NewGuid().ToString("N");
+        internal Action<string> DeleteFile { get; init; } = File.Delete;
+        internal TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
+        internal string? ExpectedDocumentRoot { get; init; }
+    }
+    public static Task<Result> TryRunAsync(string xamppRoot, CancellationToken cancellationToken = default) =>
+        RunAsync(xamppRoot, new ProbeOptions(), cancellationToken);
 
-        var confText = File.ReadAllText(config);
-        var configuredRoot = FindDocumentRoot(confText, apacheRoot);
-        if (configuredRoot is null || !SamePath(configuredRoot, documentRoot))
-            return new Result(false, false,
-                "Apache DocumentRoot가 기본 XAMPP htdocs인지 확인되지 않아 HTTP cURL 검증을 건너뜁니다.");
-
-        var port = FindHttpListenPort(confText);
-        if (port is null)
-            return new Result(false, false,
-                "Apache의 로컬 HTTP Listen 포트를 확인하지 못해 HTTP cURL 검증을 건너뜁니다.");
-
-        var token = Guid.NewGuid().ToString("N");
-        var file = Path.Combine(documentRoot, ".xampp-updater-curl-" + token + ".php");
-        var script = "<?php header('Content-Type: text/plain; charset=utf-8'); " +
-            "$ok = extension_loaded('curl') && function_exists('curl_init'); " +
-            "if ($ok) { $h = curl_init(); $ok = ($h !== false); if ($ok) curl_close($h); } " +
-            "echo '" + token + "|' . ($ok ? 'OK' : 'CURL_MISSING');";
-        var created = false;
+    internal static async Task<Result> RunAsync(string xamppRoot, ProbeOptions options, CancellationToken cancellationToken = default)
+    {
+        var clock = Stopwatch.StartNew();
+        ApachePhpProbeTargetSelector.Target? target = null;
+        Result Outcome(ProbeStatus status, ProbePhase phase, string code, string detail) =>
+            new(status != ProbeStatus.Skip, status == ProbeStatus.Pass,
+                $"Apache PHP HTTP cURL [{status.ToString().ToUpperInvariant()}:{code}] {detail}")
+            {
+                Status = status, Phase = phase, ReasonCode = code,
+                Protocol = target is null ? "Unknown" : "HTTP", Host = target?.Address.ToString(),
+                Port = target?.Port, DocumentRoot = target?.DocumentRoot,
+                ElapsedMilliseconds = clock.ElapsedMilliseconds
+            };
+        cancellationToken.ThrowIfCancellationRequested();
         try
         {
-            // CreateNew prevents overwriting user content even if the random name collides.
+            var apacheRoot = Path.Combine(xamppRoot, "apache");
+            var config = Path.Combine(apacheRoot, "conf", "httpd.conf");
+            if (!File.Exists(config))
+                return Outcome(ProbeStatus.Skip, ProbePhase.ConfigDiscovery, "CONFIG_MISSING", "Apache 설정 파일이 없습니다.");
+            target = ApachePhpProbeTargetSelector.Select(await File.ReadAllTextAsync(config, cancellationToken), apacheRoot, out var reason);
+            if (target is null)
+                return Outcome(ProbeStatus.Skip, ProbePhase.TargetSelection, reason, "단일 활성 DocumentRoot/로컬 HTTP Listen을 확정할 수 없습니다. Include/조건부 설정/VirtualHost는 후속 단계에서 지원합니다.");
+            if (options.ExpectedDocumentRoot is not null && !string.Equals(
+                Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.ExpectedDocumentRoot)),
+                target.DocumentRoot, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                return Outcome(ProbeStatus.Skip, ProbePhase.TargetSelection, "RUNTIME_ROOT_MISMATCH", "Apache 서비스의 활성 DocumentRoot가 설정 후보와 다릅니다.");
+            if (!ApachePhpProbeTargetSelector.IsSafeWebRoot(target.DocumentRoot))
+                return Outcome(ProbeStatus.Skip, ProbePhase.TargetSelection, "WEB_ROOT_UNSAFE", "DocumentRoot가 없거나 경로에 재분석 지점/.htaccess가 있습니다: " + target.DocumentRoot);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return Outcome(ProbeStatus.Skip, ProbePhase.ConfigDiscovery, "CONFIG_UNREADABLE", ex.Message);
+        }
+        var token = options.NewToken();
+        if (token.Length != 32 || token.Any(c => !char.IsAsciiHexDigit(c)))
+            throw new ArgumentException("Probe token must contain 32 hexadecimal characters.");
+        var file = Path.Combine(target.DocumentRoot, ".xampp-updater-curl-" + token + ".php");
+        var script = "<?php header('Content-Type: text/plain; charset=utf-8'); header('Cache-Control: no-store'); " +
+            "$ok = extension_loaded('curl') && function_exists('curl_init') && function_exists('curl_close'); " +
+            "try { if ($ok) { $h = curl_init(); $ok = ($h !== false); if ($ok) curl_close($h); } } " +
+            "catch (Throwable $e) { $ok = false; } " +
+            "echo '" + token + "' . '|' . ($ok ? 'OK' : 'CURL_MISSING');";
+        var created = false;
+        Result? result = null;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(options.Timeout);
+        try
+        {
+            if (!ApachePhpProbeTargetSelector.IsSafeWebRoot(target.DocumentRoot))
+                return Outcome(ProbeStatus.Skip, ProbePhase.FilePreparation, "WEB_ROOT_CHANGED", target.DocumentRoot);
             using (var output = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 created = true;
-                using var writer = new StreamWriter(output);
-                writer.Write(script);
+                using var writer = new StreamWriter(output, new UTF8Encoding(false));
+                await writer.WriteAsync(script.AsMemory(), timeout.Token);
             }
-
-            using var handler = new HttpClientHandler
+            using var handler = options.HandlerFactory?.Invoke() ?? new HttpClientHandler
             {
-                AllowAutoRedirect = false,
-                UseProxy = false
+                AllowAutoRedirect = false, UseProxy = false, UseCookies = false,
+                Credentials = null, PreAuthenticate = false
             };
-            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
-            using var request = new HttpRequestMessage(HttpMethod.Get,
-                new Uri($"http://127.0.0.1:{port}/" + Path.GetFileName(file)));
+            using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+            var uri = new UriBuilder("http", target.Address.ToString(), target.Port, Path.GetFileName(file)).Uri;
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Host = "localhost";
-            using var response = await client.SendAsync(request, cancellationToken);
-            var content = (await response.Content.ReadAsStringAsync(cancellationToken)).Trim();
-
-            if (content.Equals(token + "|OK", StringComparison.Ordinal) && response.StatusCode == HttpStatusCode.OK)
-                return new Result(true, true, $"Apache HTTP PHP cURL 실행 검증 성공 (loopback:{port})");
-            if (content.Equals(token + "|CURL_MISSING", StringComparison.Ordinal))
-                return new Result(true, false, "Apache HTTP PHP cURL 실행 검증 실패: 웹 SAPI에서 curl_init을 사용할 수 없습니다.");
-            if (response.IsSuccessStatusCode && content.Contains(token + "|", StringComparison.Ordinal))
-                return new Result(true, false, "Apache HTTP PHP cURL 응답에 예기치 않은 오류 또는 출력이 있습니다.");
-
-            // A virtual host, rewrite rule, or access policy may prevent reaching this file.
-            return new Result(false, false,
-                $"HTTP 요청 상태 {(int)response.StatusCode}: 진단 PHP 파일이 실행됐는지 확인할 수 없어 건너뜁니다.");
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            const int maxBytes = 16384;
+            using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            var bytes = new byte[maxBytes + 1];
+            var length = 0;
+            while (length < bytes.Length)
+            {
+                var read = await stream.ReadAsync(bytes.AsMemory(length), timeout.Token);
+                if (read == 0) break;
+                length += read;
+            }
+            var content = Encoding.UTF8.GetString(bytes, 0, length).Trim();
+            if (content.Contains("<?php", StringComparison.OrdinalIgnoreCase) && content.Contains(token, StringComparison.Ordinal))
+                result = Outcome(ProbeStatus.Fail, ProbePhase.PhpExecution, "PHP_SOURCE_EXPOSED", "웹 서버가 진단 PHP 소스를 노출했습니다.");
+            else if (length > maxBytes)
+                result = Outcome(ProbeStatus.Skip, ProbePhase.HttpRequest, "RESPONSE_TOO_LARGE", "응답이 16 KiB 제한을 초과했습니다.");
+            else if (content == token + "|CURL_MISSING")
+                result = Outcome(ProbeStatus.Fail, ProbePhase.CurlCheck, "CURL_UNAVAILABLE", "웹 SAPI에서 cURL 초기화/정리가 실패했습니다.");
+            else if (response.StatusCode == HttpStatusCode.OK && content == token + "|OK")
+                result = Outcome(ProbeStatus.Pass, ProbePhase.CurlCheck, "CURL_INITIALIZED", $"로컬 HTTP PHP 실행 및 cURL 초기화/정리 확인 ({target.Address}:{target.Port}, DocumentRoot={target.DocumentRoot}). 외부 HTTPS 통신은 검사하지 않았습니다.");
+            else
+                result = Outcome(ProbeStatus.Skip, ProbePhase.HttpRequest, "HTTP_UNVERIFIED", $"HTTP {(int)response.StatusCode}: 인증/접근 제한/리디렉션/다른 사이트 또는 PHP 실행 여부를 확인할 수 없는 응답입니다.");
         }
-        catch (UnauthorizedAccessException ex) when (!created)
+        catch (Exception ex) when (!created && ex is IOException or UnauthorizedAccessException)
         {
-            return new Result(false, false, "Apache DocumentRoot에 테스트 파일을 생성할 수 없어 HTTP 검증을 건너뜁니다: " + ex.Message);
+            result = Outcome(ProbeStatus.Skip, ProbePhase.FilePreparation, "FILE_NOT_CREATED", ex.Message);
         }
-        catch (IOException ex) when (!created)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or HttpRequestException)
         {
-            return new Result(false, false, "Apache DocumentRoot 테스트 파일을 만들 수 없어 HTTP 검증을 건너뜁니다: " + ex.Message);
+            result = Outcome(ProbeStatus.Skip, ProbePhase.HttpRequest, "PROBE_UNAVAILABLE", ex.Message);
         }
-        catch (HttpRequestException ex)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            return new Result(false, false, "Apache 루프백 접속이 불가능해 HTTP cURL 검증을 건너뜁니다: " + ex.Message);
-        }
-        catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return new Result(false, false, "Apache 루프백 HTTP 검증이 제한 시간(5초)을 초과해 건너뜁니다.");
+            result = Outcome(ProbeStatus.Skip, ProbePhase.HttpRequest, "TIMEOUT", "로컬 HTTP 검증이 제한 시간을 초과했습니다.");
         }
         finally
         {
-            // Never leave an executable test endpoint accessible from the web.
-            if (created && File.Exists(file))
+            if (created)
             {
-                try { File.Delete(file); }
-                catch (Exception ex)
+                Exception? error = null;
+                for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    throw new IOException("임시 Apache PHP 진단 파일을 삭제하지 못했습니다: " + file, ex);
+                    try { options.DeleteFile(file); error = null; break; }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { error = ex; }
+                }
+                if (error is not null)
+                {
+                    var cleanupDetail = "임시 PHP 파일 삭제 실패. 직접 삭제해야 합니다: " + file + " / " + error.Message;
+                    result = result is { Status: ProbeStatus.Fail }
+                        ? result with { Phase = ProbePhase.Cleanup, Detail = result.Detail + " / " + cleanupDetail }
+                        : Outcome(ProbeStatus.Skip, ProbePhase.Cleanup, "CLEANUP_FAILED", cleanupDetail);
+                    if (cancellationToken.IsCancellationRequested) throw new IOException(result.Detail, error);
                 }
             }
         }
+        cancellationToken.ThrowIfCancellationRequested();
+        return result! with { ElapsedMilliseconds = clock.ElapsedMilliseconds };
     }
-
-    public static string? FindDocumentRoot(string config, string apacheRoot)
-    {
-        var match = Regex.Match(config, @"(?im)^\s*DocumentRoot\s+(?:""(?<path>[^""]+)""|(?<path>\S+))\s*(?:#.*)?$");
-        if (!match.Success) return null;
-        var value = match.Groups["path"].Value.Replace('/', Path.DirectorySeparatorChar);
-        // Only literal absolute paths, never expand environment variables or aliases.
-        if (value.Contains('$') || !Path.IsPathFullyQualified(value)) return null;
-        return Path.GetFullPath(value);
-    }
+    public static string? FindDocumentRoot(string config, string apacheRoot) =>
+        ApachePhpProbeTargetSelector.Select(config + "\nListen 127.0.0.1:80 http\n", apacheRoot, out _)?.DocumentRoot;
 
     public static int? FindHttpListenPort(string config)
     {
-        foreach (Match match in Regex.Matches(config, @"(?im)^\s*Listen\s+(?<value>\S+)\s*(?:#.*)?$"))
+        foreach (var line in config.Split('\n'))
         {
-            var raw = match.Groups["value"].Value;
-            var portText = raw.Contains(':') ? raw[(raw.LastIndexOf(':') + 1)..] : raw;
-            if (int.TryParse(portText, out var port) && port is >= 1 and <= 65535 && port != 443)
-                return port;
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("Listen ", StringComparison.OrdinalIgnoreCase) &&
+                ApachePhpProbeTargetSelector.TryListener(trimmed[7..].Trim(), out _, out var port)) return port;
         }
         return null;
     }
-
-    private static bool SamePath(string left, string right) =>
-        string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(left)),
-            Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)), StringComparison.OrdinalIgnoreCase);
 }

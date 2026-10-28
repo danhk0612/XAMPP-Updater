@@ -1,0 +1,5 @@
+Custom Apache DocumentRoot configurations previously skipped HTTP cURL validation unless they matched XAMPP htdocs. This candidate supports an unambiguous literal main-server root, including external/spaced/non-ASCII paths, and checks it against the selected service's runtime root before writing a temporary PHP endpoint.
+
+The probe preserves existing rollback semantics, rejects ambiguous Include/conditional/vhost/TLS/proxy routing, bounds response size and time, detects PHP source disclosure, and makes cleanup failures visible without overwriting user files. DLL synchronization/auditing and component update logic remain unchanged.
+
+Validation: Release Linux cross-build passed with zero warnings/errors. 127 HTTP assertions, production HttpClient loopback transport and existing DLL/module-initialized regression fixtures passed. Responses are fixtures: actual Apache/PHP and Windows service behavior have not been validated. Full smoke execution requires Windows (Linux fails on Registry access). Windows CI and actual Apache/PHP tests remain release gates. See HTTP_PROBE_EXPANSION.md for supported syntax, conservative SKIP cases and Phase B/C/D dependencies.

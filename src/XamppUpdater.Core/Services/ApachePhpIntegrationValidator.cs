@@ -144,11 +144,23 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
 
             if (requireApacheRunning)
             {
-                var probe = await ApachePhpCurlHttpProbe.TryRunAsync(xamppRoot, cancellationToken);
-                if (probe.Executed && !probe.Success)
-                    throw new InvalidOperationException(probe.Detail);
-                if (probe.Success) steps.Add(probe.Detail);
-                else warnings.Add(probe.Detail);
+                // -n makes Apache use the selected service's registered configuration arguments.
+                // Never write to a guessed main DocumentRoot when a service uses another -f/-d.
+                var serviceName = installation.Components
+                    .First(component => component.Type == XamppComponentType.Apache).ServiceName!;
+                var runtime = await ReadProbeRuntimeAsync(httpd, serviceName, apacheRoot, cancellationToken);
+                var rootMatch = Regex.Match(runtime.Output, "(?im)^\\s*Main DocumentRoot:\\s*\"(?<path>[^\"]+)\"\\s*$");
+                if (runtime.ExitCode != 0 || !rootMatch.Success)
+                    warnings.Add("Apache HTTP cURL [SKIP:RUNTIME_CONFIG_UNVERIFIED] 서비스의 활성 DocumentRoot를 확인할 수 없습니다.");
+                else
+                {
+                    var probe = await ApachePhpCurlHttpProbe.RunAsync(xamppRoot,
+                        new ApachePhpCurlHttpProbe.ProbeOptions { ExpectedDocumentRoot = rootMatch.Groups["path"].Value }, cancellationToken);
+                    if (probe.Executed && !probe.Success)
+                        throw new InvalidOperationException(probe.Detail);
+                    if (probe.Success) steps.Add(probe.Detail);
+                    else warnings.Add(probe.Detail);
+                }
             }
             else
             {
@@ -170,6 +182,21 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
             .Take(24).Select(item => "DLL 진단: " + item.Code + " " + item.Name + " / " + item.Detail));
 
         return new ApachePhpIntegrationValidationResult(steps, warnings);
+    }
+
+    private static async Task<ProcessResult> ReadProbeRuntimeAsync(
+        string httpd, string serviceName, string apacheRoot, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await RunAsync(httpd, ["-n", serviceName, "-t", "-D", "DUMP_RUN_CFG"], apacheRoot, cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested &&
+            ex is IOException or System.ComponentModel.Win32Exception or InvalidOperationException or OperationCanceledException)
+        {
+            // Diagnostic discovery failure is not evidence that PHP or Apache is broken.
+            return new ProcessResult(-1, ex.Message);
+        }
     }
 
     private static string? FindConfiguredPhpModule(string apacheRoot)
