@@ -156,6 +156,19 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
             }
         }
 
+        var dllAudit = DllDependencyAuditService.Analyze(phpRoot, apacheRoot);
+        steps.AddRange(dllAudit.Summarize("Apache/PHP 최종 연동"));
+        var sharedConflicts = dllAudit.Findings
+            .Where(item => item.Severity == DllAuditSeverity.Block).ToArray();
+        if (sharedConflicts.Length > 0)
+            throw new InvalidOperationException(
+                "Apache/PHP 공유 DLL 충돌: " +
+                string.Join(" / ", sharedConflicts.Take(8).Select(item => item.Name + " (" + item.Code + ")")) +
+                ". 기존 Apache 모듈과의 호환성을 확인해야 합니다.");
+        warnings.AddRange(dllAudit.Findings
+            .Where(item => item.Severity == DllAuditSeverity.Warning)
+            .Take(24).Select(item => "DLL 진단: " + item.Code + " " + item.Name + " / " + item.Detail));
+
         return new ApachePhpIntegrationValidationResult(steps, warnings);
     }
 
