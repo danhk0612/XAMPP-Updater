@@ -85,12 +85,22 @@ public sealed class ComponentRollbackService : IComponentRollbackService
             {
                 ReconcileApachePhpSapi(installation.RootPath, componentRoot);
                 steps.Add("복원된 PHP 버전에 맞게 Apache PHP SAPI 설정 복원 완료");
+                var dllWarnings = ApachePhpDllSyncService.Restore(manifest.BackupRoot,
+                    Path.Combine(installation.RootPath, "apache"));
+                steps.AddRange(dllWarnings.Select(warning => "Apache DLL 복원 경고: " + warning));
+                steps.Add("PHP 롤백과 연결된 Apache DLL 복원 완료");
             }
             else if (manifest.Type == XamppComponentType.Apache)
             {
                 var currentPhpRoot = Path.Combine(installation.RootPath, "php");
                 ReconcileApachePhpSapi(installation.RootPath, currentPhpRoot);
                 steps.Add("복원된 Apache 설정을 현재 PHP 버전에 맞게 PHP SAPI 연동 보정 완료");
+                var dllChanges = ApachePhpDllSyncService.Plan(currentPhpRoot,
+                    Path.Combine(installation.RootPath, "apache"));
+                ApachePhpDllSyncService.Apply(dllChanges);
+                if (dllChanges.Count > 0)
+                    steps.Add("Apache 롤백 후 현재 PHP cURL DLL 재동기화: " +
+                        string.Join(", ", dllChanges.Select(item => item.Name)));
             }
 
             await ValidateAsync(manifest.Type, componentRoot, cancellationToken);
