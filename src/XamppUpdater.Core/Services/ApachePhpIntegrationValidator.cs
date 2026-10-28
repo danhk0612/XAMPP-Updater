@@ -57,6 +57,26 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
         EnsureNoPhpStartupFailure(phpModules.Output);
         steps.Add("PHP -m 연동 전 검증 완료");
 
+        // Apache's DLL search context differs from php.exe's. Probe the cURL extension
+        // with both the PHP and Apache dependency directories available.
+        var curlExtension = Path.Combine(phpRoot, "ext", "php_curl.dll");
+        if (OperatingSystem.IsWindows() && File.Exists(curlExtension) &&
+            phpModules.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.Trim().Equals("curl", StringComparison.OrdinalIgnoreCase)))
+        {
+            var curlLoader = WindowsLoaderProbe.TryLoad(curlExtension, new[]
+            {
+                phpRoot,
+                Path.Combine(apacheRoot, "bin"),
+                Path.Combine(phpRoot, "ext")
+            });
+            if (!curlLoader.Success)
+                throw new InvalidOperationException(
+                    "Apache/PHP cURL DLL loader 검증 실패 (Windows error " +
+                    curlLoader.ErrorCode + "): " + curlLoader.Message);
+            steps.Add("PHP cURL DLL Windows loader 검증 완료");
+        }
+
         var configuredModule = FindConfiguredPhpModule(apacheRoot);
         if (configuredModule is not null)
         {
