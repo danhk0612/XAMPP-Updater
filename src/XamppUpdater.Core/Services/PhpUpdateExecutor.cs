@@ -79,6 +79,7 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
         var apacheSnapshots = new List<(string Source, string Snapshot)>();
         var apacheStopped = false;
         var phpSwapped = false;
+        var dllJournalCaptured = false;
 
         try
         {
@@ -127,6 +128,16 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
             var sapiWarnings = MigrateApachePhpSapi(apacheRoot, phpRoot);
             warnings.AddRange(sapiWarnings);
             steps.Add("Apache PHP SAPI 설정 갱신 완료");
+
+            var dllChanges = ApachePhpDllSyncService.Plan(phpRoot, apacheRoot);
+            if (dllChanges.Count > 0)
+            {
+                ApachePhpDllSyncService.Capture(dllChanges, backup.Manifest.BackupRoot);
+                dllJournalCaptured = true;
+                ApachePhpDllSyncService.Apply(dllChanges);
+                steps.Add("Apache cURL 의존 DLL 동기화 및 원본 백업 완료: " +
+                    string.Join(", ", dllChanges.Select(item => item.Name)));
+            }
 
             ValidateInstalledPhp(phpRoot);
             steps.Add("php -v / php -m 검증 완료");
@@ -178,6 +189,19 @@ public sealed partial class PhpUpdateExecutor : IPhpUpdateExecutor
                 catch (Exception rollbackEx)
                 {
                     rollbackErrors.Add("PHP 디렉터리 롤백 실패: " + rollbackEx.Message);
+                }
+            }
+
+            if (dllJournalCaptured)
+            {
+                try
+                {
+                    warnings.AddRange(ApachePhpDllSyncService.Restore(backup.Manifest.BackupRoot, apacheRoot));
+                    steps.Add("Apache DLL 자동 원복 완료");
+                }
+                catch (Exception restoreEx)
+                {
+                    rollbackErrors.Add("Apache DLL 원복 실패: " + restoreEx.Message);
                 }
             }
 
