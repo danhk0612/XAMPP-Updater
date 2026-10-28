@@ -55,3 +55,7 @@ This policy applies to the common Apache/PHP/MariaDB `BackupManifest` catalog. p
 A PHP update may additionally synchronize dependencies of `php_curl.dll` into the existing Apache `bin` directory. The original files are backed up under `apache-php-dll-sync/` in the PHP rollback backup, with an `apache-php-dll-sync.json` journal containing original and applied SHA256 values. Integrity verification checks these snapshots before a rollback. Existing backups without the journal continue to work.
 
 On PHP rollback, a DLL still matching the applied hash is restored to its original hash. A DLL modified independently by a subsequent Apache update is not overwritten and is reported as a warning. If the overall integration rollback fails, the temporary pre-rollback Apache DLL snapshot is restored alongside the previous PHP files and configuration. Apache version changes independently re-evaluate cURL dependency collisions against the installed PHP binaries.
+
+## cURL DLL disappearance after synchronization (v1.1.2)
+
+Cross-component PHP rollback journal entries with `Existed=false` represent Apache-bin DLLs introduced by the updater and must be removed on rollback. Entries whose files existed previously are restored from the saved original even if the file disappeared after the update's initial SHA256 check. Independently modified, still-existing DLLs remain protected from overwrite and generate a warning. The journal remains compatible with v1.1.1 and earlier backups without this metadata.
