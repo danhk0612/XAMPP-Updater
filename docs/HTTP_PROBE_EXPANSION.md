@@ -47,7 +47,7 @@ The full original smoke runner was tried during onboarding: **blocked by Windows
 
 Windows CI for implementation commit `4eaf4f38f92a3af44b022e70ec4847be3ecd2500`: **passed**. [Run 40754147145](https://github.com/danhk0612/XAMPP-Updater/actions/runs/40754147145) completed restore, Release build, full smoke runner, app publish, NativeAOT bootstrap publish, executable version/layout/bootstrap self-test and win-x64 artifact upload successfully. Release tag/checksum/asset steps were correctly skipped on this feature branch. Step outcomes were read from GitHub's public Actions job page; authenticated logs/artifact download were unavailable. This evidence applies to that exact implementation commit; inspect later branch runs for follow-up changes.
 
-Not verified: WPF GUI behavior, actual Windows service `-n`/DUMP_RUN_CFG behavior against Apache, real Windows Apache/PHP HTTP execution, actual PHP 8.2→8.2 or 8.2→8.3 upgrades, service restart/rollback, JCMS24, release EXE/checksum. Do not describe this candidate as released or production-validated.
+Not verified: WPF GUI behavior, actual Windows service `-n`/DUMP_RUN_CFG behavior against Apache, real Windows Apache/PHP HTTP execution, actual PHP 8.2→8.2 or 8.2→8.3 upgrades, service restart/rollback, JCMS24, Do not describe CI or fixture results as production validation. The published EXE/checksum were subsequently verified as recorded below.
 
 ## Phase B dependency and design
 
@@ -69,14 +69,18 @@ Test HTTP 80/8080, HTTPS 443/8443, IPv4/IPv6, mixed listeners, named SNI, truste
 
 Handle reproducible cases for Rewrite/.htaccess, Alias, Basic/IP access control, proxying and PHP-FPM/FastCGI as separate work. Do not disable security or gather credentials to force a probe to pass. Keep configuration recognition separate from proof of execution.
 
-## External gates and continuation
+## Deployment result: v1.1.4
 
-GitHub Git reads work through platform authentication. GitHub API access initially returned Forbidden; `api.github.com` has been added to the environment draft's custom allowlist, preserving package-manager presets. The draft must be saved/applied in environment settings before PR/API operations can be retried. Read-only CI results are available separately through the public GitHub Actions web pages. API authentication/write permission must then be verified separately; Git access alone does not prove it.
+GitHub API access remained blocked, so no PR was created. Automatic review initially rejected direct main changes because the original instructions requested a PR/merge gate. The user then explicitly approved applying commit `9c370d0` directly to main and running release/v1.1.4 deployment. That authorization was followed; no CI verification was disabled.
 
-A reviewable PR body is in `docs/HTTP_PROBE_PHASE_A_PR.md`. After access is available: open Phase A PR, examine the current-head Windows CI (the initial implementation CI passed), fix any new failures, verify real Apache/PHP cases, merge only with those gates met, then bump to 1.1.4 following Directory.Build.props and the release/v* workflow. Check the published EXE and SHA256. Do not create release branches to bypass blocked checks. Phase B/C implementation and release must not be marked complete from this Phase A candidate.
+- Published release: https://github.com/danhk0612/XAMPP-Updater/releases/tag/v1.1.4
+- Release source/tag/branch commit: `9c370d0c2e18160f2ea402bbfc841019c2ae73a5`.
+- Release CI: https://github.com/danhk0612/XAMPP-Updater/actions/runs/40757438368 — successful Windows build, full smoke, app payload, NativeAOT bootstrap, EXE version/layout/self-test, checksum generation, artifact upload and GitHub Release asset publication.
+- EXE: https://github.com/danhk0612/XAMPP-Updater/releases/download/v1.1.4/XAMPP-Updater.exe
+- Checksum: https://github.com/danhk0612/XAMPP-Updater/releases/download/v1.1.4/XAMPP-Updater.exe.sha256
+- Published EXE size: 3,501,056 bytes.
+- SHA256: `b056ac25bb4ac6ec1b436c31559aabb45fdd1a61a9f3038f536b2c447feacfc6`.
 
-## v1.1.4 release preparation
+Both public assets were downloaded after publication. The computed EXE SHA256 matched the published checksum, its MZ header was verified, and Git readback confirmed main/release branch/tag all pointed at the release commit before this documentation-only follow-up. The release tag and executable remain at that exact commit. Future main commits do not change the release provenance.
 
-The user explicitly requested deployment after the Phase A implementation CI passed. Final implementation commit `731551b30b5bfbb73d390df8fbada109b8d7bef3` passed [Windows CI 40754739155](https://github.com/danhk0612/XAMPP-Updater/actions/runs/40754739155), including full smoke tests, NativeAOT publishing, executable verification and artifact upload.
-
-GitHub API access remains blocked, so PR creation is unavailable. Automatic approval review rejected the attempted direct main push because it would bypass the requested PR/merge gate; the attempt did not execute. No default-branch update or release trigger has been made. The version and release notes are prepared on the feature branch for review. Continue through PR/merge once API access is available, or obtain explicit authorization for the direct-main/release path rejected by the reviewer. Do not work around that rejection using a release-branch push. The existing release/v* workflow retains all CI checks. Version 1.1.4 contains Phase A only. Real Apache/PHP service integration and JCMS24 production validation remain unverified; Include/VirtualHost/HTTPS support remains deferred.
+This release contains Phase A only. Actual Windows Apache/PHP service integration, real update/rollback paths and JCMS24 operations remain unverified. Include/VirtualHost/HTTPS support and v1.2.0 remain follow-up work, with Phase D limited to the backlog above.
