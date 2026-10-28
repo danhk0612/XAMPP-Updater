@@ -37,12 +37,16 @@ public static class ApachePhpCurlHttpProbe
             "$ok = extension_loaded('curl') && function_exists('curl_init'); " +
             "if ($ok) { $h = curl_init(); $ok = ($h !== false); if ($ok) curl_close($h); } " +
             "echo '" + token + "|' . ($ok ? 'OK' : 'CURL_MISSING');";
+        var created = false;
         try
         {
             // CreateNew prevents overwriting user content even if the random name collides.
             using (var output = new FileStream(file, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-            using (var writer = new StreamWriter(output))
+            {
+                created = true;
+                using var writer = new StreamWriter(output);
                 writer.Write(script);
+            }
 
             using var handler = new HttpClientHandler
             {
@@ -67,6 +71,14 @@ public static class ApachePhpCurlHttpProbe
             return new Result(false, false,
                 $"HTTP 요청 상태 {(int)response.StatusCode}: 진단 PHP 파일이 실행됐는지 확인할 수 없어 건너뜁니다.");
         }
+        catch (UnauthorizedAccessException ex) when (!created)
+        {
+            return new Result(false, false, "Apache DocumentRoot에 테스트 파일을 생성할 수 없어 HTTP 검증을 건너뜁니다: " + ex.Message);
+        }
+        catch (IOException ex) when (!created)
+        {
+            return new Result(false, false, "Apache DocumentRoot 테스트 파일을 만들 수 없어 HTTP 검증을 건너뜁니다: " + ex.Message);
+        }
         catch (HttpRequestException ex)
         {
             return new Result(false, false, "Apache 루프백 접속이 불가능해 HTTP cURL 검증을 건너뜁니다: " + ex.Message);
@@ -78,7 +90,7 @@ public static class ApachePhpCurlHttpProbe
         finally
         {
             // Never leave an executable test endpoint accessible from the web.
-            if (File.Exists(file))
+            if (created && File.Exists(file))
             {
                 try { File.Delete(file); }
                 catch (Exception ex)
