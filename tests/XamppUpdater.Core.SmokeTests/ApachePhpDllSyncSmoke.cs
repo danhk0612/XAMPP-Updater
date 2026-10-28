@@ -1,7 +1,5 @@
 using XamppUpdater.Core.Services;
 
-namespace XamppUpdater.Core.SmokeTests;
-
 internal static class ApachePhpDllSyncSmoke
 {
     public static void Run()
