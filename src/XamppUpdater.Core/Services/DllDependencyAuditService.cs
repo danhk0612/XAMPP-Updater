@@ -23,7 +23,7 @@ public sealed record DllDependencyAuditReport(
         {
             $"DLL 의존성 진단 [{phase}]: 활성 PHP 모듈 {PhpRootCount}, Apache 모듈 {ApacheRootCount}, " +
             $"주의 {Findings.Count(item => item.Severity == DllAuditSeverity.Warning)}, " +
-            $"충돌 {Findings.Count(item => item.Severity == DllAuditSeverity.Block)}"
+            $"DLL 이름 충돌 {Findings.Count(item => item.Code.Contains("COLLISION", StringComparison.Ordinal))}"
         };
         messages.AddRange(Findings.Take(maxDetails)
             .Select(item => $"DLL [{item.Severity}/{item.Code}] {item.Name}: {item.Detail}"));
@@ -102,11 +102,13 @@ public static class DllDependencyAuditService
             var apacheOwner = apacheDeps.ContainsKey(name);
             var phpConsumer = phpDeps.ContainsKey(name);
             var protectedLibrary = IsProtectedApacheRuntime(name);
-            var blocking = apacheOwner && phpConsumer && !protectedLibrary;
+            // A hash collision does not by itself establish an ABI failure: Apache may
+            // legitimately retain its own zlib/OpenSSL copy. Only block a specific
+            // requested overwrite of a DLL already used by an Apache module.
             findings.Add(new DllAuditFinding(
-                blocking ? DllAuditSeverity.Block : DllAuditSeverity.Warning,
+                DllAuditSeverity.Warning,
                 protectedLibrary && apacheOwner ? "APACHE_RUNTIME_COLLISION" :
-                    blocking ? "SHARED_COLLISION" : "SAME_NAME_DIFFERENT_BINARY",
+                    apacheOwner && phpConsumer ? "SHARED_COLLISION" : "SAME_NAME_DIFFERENT_BINARY",
                 name,
                 $"PHP/Apache DLL SHA256 불일치; PHP 참조={phpConsumer}, Apache 참조={apacheOwner}. " +
                 "실제 로딩 경로와 ABI를 확인해야 하며 자동으로 Apache 소유 DLL을 교체하지 않습니다."));
