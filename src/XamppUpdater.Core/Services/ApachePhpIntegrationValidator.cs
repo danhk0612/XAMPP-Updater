@@ -132,6 +132,30 @@ public sealed class ApachePhpIntegrationValidator : IApachePhpIntegrationValidat
             steps.Add($"Apache 서비스 RUNNING 연동 검증 완료: {serviceName}");
         }
 
+        // Verify on-disk Apache DLLs again after the service has restarted and all
+        // module-loader checks have run. A deleted DLL must not yield a success result.
+        var curlEnabled = File.Exists(curlExtension) &&
+            phpModules.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.Trim().Equals("curl", StringComparison.OrdinalIgnoreCase));
+        if (curlEnabled)
+        {
+            steps.AddRange(ApachePhpDllSyncService.VerifyDependencies(phpRoot, apacheRoot, "최종 연동 검증")
+                .Select(detail => "Apache cURL DLL [최종 확인] " + detail));
+
+            if (requireApacheRunning)
+            {
+                var probe = await ApachePhpCurlHttpProbe.TryRunAsync(xamppRoot, cancellationToken);
+                if (probe.Executed && !probe.Success)
+                    throw new InvalidOperationException(probe.Detail);
+                if (probe.Success) steps.Add(probe.Detail);
+                else warnings.Add(probe.Detail);
+            }
+            else
+            {
+                warnings.Add("Apache 서비스가 원래 중지 상태이므로 실제 HTTP PHP cURL 실행 검증은 건너뜁니다.");
+            }
+        }
+
         return new ApachePhpIntegrationValidationResult(steps, warnings);
     }
 
